@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
    AGROSUPER – Portal de Requerimientos de Infraestructura
-   Almacenamiento: localStorage
+   Almacenamiento: Cloud Firestore (Firebase)
    ─────────────────────────────────────────────────────────
    ROLES:
      user         → ingresa solicitudes, ve las suyas
@@ -10,36 +10,56 @@
      gerente      → autoriza / posterga / rechaza
 ═══════════════════════════════════════════════════════════ */
 
+// ── Firebase Init ──────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "AIzaSyDLA0GPjLrWJIDoPjo9vXPmnJLnUi-9jMY",
+  authDomain:        "portal-necesidades-la-calera.firebaseapp.com",
+  projectId:         "portal-necesidades-la-calera",
+  storageBucket:     "portal-necesidades-la-calera.firebasestorage.app",
+  messagingSenderId: "945581573169",
+  appId:             "1:945581573169:web:09dbd4804ca4acddaf0110"
+};
+firebase.initializeApp(firebaseConfig);
+const fdb = firebase.firestore();
+
+// ── Cache en memoria ───────────────────────────────────────
+const _cache = { users: [], sols: [] };
+
+// ── DB facade ──────────────────────────────────────────────
+const DB = {
+  users:     () => _cache.users,
+  sols:      () => _cache.sols,
+  addUser:   (user) => fdb.collection('users').doc(user.id).set(user),
+  addSol:    (sol)  => fdb.collection('solicitudes').doc(sol.id).set(sol),
+  updateSol: (id, data) => fdb.collection('solicitudes').doc(id).update(data),
+};
+
 // ── Helpers ────────────────────────────────────────────────
 const uid  = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-
-// Genera ticket correlativo: REQ-2026-001
-function generateTicket() {
-  const year    = new Date().getFullYear();
-  const counter = parseInt(localStorage.getItem('ag2_ticket_counter') || '0') + 1;
-  localStorage.setItem('ag2_ticket_counter', String(counter));
-  return `REQ-${year}-${String(counter).padStart(3, '0')}`;
-}
 const esc  = s  => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const fmt  = iso => iso ? new Date(iso).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
 const fmtD = iso => iso ? new Date(iso).toLocaleDateString('es-CL') : '—';
 const clp  = n   => Number(n).toLocaleString('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0});
 const initials   = name => name.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
-// Convierte motivo a clase CSS válida (sin espacios)
 const motivoCss  = m => 'badge-motivo-' + String(m).replace(/\s+/g, '-');
-const areaName = letter => ({A:'Producción',B:'Administración',C:'Calidad',D:'Personas',E:'Mantenimiento',F:'Despacho',G:'Rendering',H:'Excelencia Operacional'}[letter]||letter);
+const areaName   = letter => ({A:'Producción',B:'Administración',C:'Calidad',D:'Personas',E:'Mantenimiento',F:'Despacho',G:'Rendering',H:'Excelencia Operacional'}[letter]||letter);
 
-// ── Persistencia ───────────────────────────────────────────
-const DB = {
-  users:       () => JSON.parse(localStorage.getItem('ag2_users')   || '[]'),
-  sols:        () => JSON.parse(localStorage.getItem('ag2_sols')    || '[]'),
-  saveUsers:   d  => localStorage.setItem('ag2_users',  JSON.stringify(d)),
-  saveSols:    d  => localStorage.setItem('ag2_sols',   JSON.stringify(d)),
-};
+// Genera ticket correlativo usando contador atómico en Firestore
+async function generateTicket() {
+  const year = new Date().getFullYear();
+  const counterRef = fdb.collection('config').doc('ticket_counter');
+  const counter = await fdb.runTransaction(async t => {
+    const doc = await t.get(counterRef);
+    const current = doc.exists ? (doc.data()[String(year)] || 0) : 0;
+    const next = current + 1;
+    t.set(counterRef, { [String(year)]: next }, { merge: true });
+    return next;
+  });
+  return `REQ-${year}-${String(counter).padStart(3, '0')}`;
+}
 
 // ── Seed usuarios precargados ──────────────────────────────
-(function seedUsers(){
-  let users = DB.users();
+async function seedUsers() {
   const preset = [
     { email:'fescobara@sopraval.cl',    name:'Fabián Escobar',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Subgerente de Mantenimiento' },
     { email:'bgutierrezl@agrosuper.com',name:'Barbara Gutierrez', role:'supervisor',    areaCode:'B', areaGroup:'Administración',areaSub:'Administración Gral.',                title:'Jefa de Administración' },
@@ -50,18 +70,26 @@ const DB = {
     { email:'rtrigo@sopraval.cl',       name:'Ricardo Trigo',     role:'jefe_area',     areaCode:'F', areaGroup:'Despacho',      areaSub:'Despacho',                             title:'Jefe de Despacho' },
     { email:'nmarquez@sopraval.cl',     name:'Nicolás Marquez',   role:'jefe_area',     areaCode:'G', areaGroup:'Rendering',     areaSub:'Planta de Rendering',                  title:'Jefe de Planta Rendering' },
   ];
+  const existingEmails = new Set(_cache.users.map(u => u.email));
+  const batch = fdb.batch();
+  let count = 0;
   preset.forEach(p => {
-    if (!users.find(u => u.email === p.email)) {
-      users.push({ id:uid(), password:'Sopraval2026', createdAt:new Date().toISOString(), ...p });
+    if (!existingEmails.has(p.email)) {
+      const id = uid();
+      batch.set(fdb.collection('users').doc(id), {
+        id, password:'Sopraval2026', createdAt: new Date().toISOString(), ...p
+      });
+      count++;
     }
   });
-  DB.saveUsers(users);
-})();
+  if (count > 0) await batch.commit();
+}
 
 // ── Estado global ──────────────────────────────────────────
-let CU = null;      // currentUser
+let CU = null;
 let openSolId = null;
 let chartCount = null, chartCost = null;
+let _activeTab = null;
 
 // ── Toast ──────────────────────────────────────────────────
 function toast(msg, type='') {
@@ -77,6 +105,57 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
 }
+
+// ── Re-render pestaña activa ───────────────────────────────
+function reRenderActive() {
+  if (!CU || !_activeTab) return;
+  if (_activeTab === 'mis')          renderMis();
+  if (_activeTab === 'costos')       renderCostos();
+  if (_activeTab === 'revision')     renderRevision();
+  if (_activeTab === 'autorizacion') renderAutorizacion();
+  if (_activeTab === 'visual')       renderVisual();
+}
+
+// ── Listeners en tiempo real ───────────────────────────────
+function startListeners() {
+  fdb.collection('users').onSnapshot(snap => {
+    _cache.users = snap.docs.map(d => d.data());
+  });
+  fdb.collection('solicitudes').onSnapshot(snap => {
+    _cache.sols = snap.docs.map(d => d.data());
+    reRenderActive();
+  });
+}
+
+// ── App Init ───────────────────────────────────────────────
+async function appInit() {
+  document.getElementById('screen-login').classList.remove('active');
+
+  // Carga inicial de datos
+  const [usersSnap, solsSnap] = await Promise.all([
+    fdb.collection('users').get(),
+    fdb.collection('solicitudes').get(),
+  ]);
+  _cache.users = usersSnap.docs.map(d => d.data());
+  _cache.sols  = solsSnap.docs.map(d => d.data());
+
+  // Seed usuarios si es necesario
+  await seedUsers();
+  // Recargar users tras seed
+  const usersSnap2 = await fdb.collection('users').get();
+  _cache.users = usersSnap2.docs.map(d => d.data());
+
+  // Iniciar listeners en tiempo real
+  startListeners();
+
+  // Mostrar login
+  showScreen('login');
+}
+
+appInit().catch(err => {
+  console.error('Error iniciando app:', err);
+  showScreen('login'); // mostrar login igual si hay error
+});
 
 // ── Tabs ───────────────────────────────────────────────────
 const TABS = {
@@ -100,14 +179,14 @@ function buildTabs() {
 }
 
 function activateTab(id) {
+  _activeTab = id;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.pane === id));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-'+id));
-  // Render dinámico
-  if (id === 'mis')         renderMis();
-  if (id === 'costos')      renderCostos();
-  if (id === 'revision')    renderRevision();
-  if (id === 'autorizacion')renderAutorizacion();
-  if (id === 'visual')      renderVisual();
+  if (id === 'mis')          renderMis();
+  if (id === 'costos')       renderCostos();
+  if (id === 'revision')     renderRevision();
+  if (id === 'autorizacion') renderAutorizacion();
+  if (id === 'visual')       renderVisual();
 }
 
 // ── Login ──────────────────────────────────────────────────
@@ -128,13 +207,13 @@ document.getElementById('form-login').addEventListener('submit', e => {
 });
 
 document.getElementById('btn-logout').addEventListener('click', () => {
-  CU = null; chartCount = null; chartCost = null;
+  CU = null; _activeTab = null; chartCount = null; chartCost = null;
   document.getElementById('form-login').reset();
   showScreen('login');
 });
 
 // ── Registro ───────────────────────────────────────────────
-document.getElementById('form-register').addEventListener('submit', e => {
+document.getElementById('form-register').addEventListener('submit', async e => {
   e.preventDefault();
   const name  = document.getElementById('reg-name').value.trim();
   const email = document.getElementById('reg-email').value.trim().toLowerCase();
@@ -142,11 +221,10 @@ document.getElementById('form-register').addEventListener('submit', e => {
   const area  = document.getElementById('reg-area').value;
   const err   = document.getElementById('reg-error');
   if (!area) { err.textContent = 'Seleccione su área de trabajo.'; return; }
-  const users = DB.users();
-  if (users.find(u => u.email.toLowerCase() === email)) { err.textContent = 'Ese correo ya está registrado.'; return; }
+  if (DB.users().find(u => u.email.toLowerCase() === email)) { err.textContent = 'Ese correo ya está registrado.'; return; }
   const [areaCode, areaGroup, areaSub] = area.split('|');
-  users.push({ id:uid(), name, email, password:pass, role:'user', areaCode, areaGroup, areaSub, title:'', createdAt:new Date().toISOString() });
-  DB.saveUsers(users);
+  const newUser = { id:uid(), name, email, password:pass, role:'user', areaCode, areaGroup, areaSub, title:'', createdAt:new Date().toISOString() };
+  await DB.addUser(newUser);
   toast('Cuenta creada. Ahora puede iniciar sesión.','ok');
   showScreen('login');
   document.getElementById('form-register').reset();
@@ -197,7 +275,7 @@ document.getElementById('btn-reset-sol').addEventListener('click', () => {
   document.getElementById('sol-error').textContent = '';
 });
 
-document.getElementById('form-solicitud').addEventListener('submit', e => {
+document.getElementById('form-solicitud').addEventListener('submit', async e => {
   e.preventDefault();
   const titulo      = document.getElementById('sol-titulo').value.trim();
   const descripcion = document.getElementById('sol-descripcion').value.trim();
@@ -213,9 +291,10 @@ document.getElementById('form-solicitud').addEventListener('submit', e => {
   err.textContent = '';
 
   const [areaCode, areaGroup, areaSub] = areaVal.split('|');
+  const ticket = await generateTicket();
   const nueva = {
     id: uid(),
-    ticket:    generateTicket(),
+    ticket,
     userId:    CU.id,
     userName:  CU.name,
     userEmail: CU.email,
@@ -233,10 +312,7 @@ document.getElementById('form-solicitud').addEventListener('submit', e => {
     decidedAt: null,
   };
 
-  const sols = DB.sols();
-  sols.push(nueva);
-  DB.saveSols(sols);
-
+  await DB.addSol(nueva);
   toast('Requerimiento enviado correctamente. Mantenimiento revisará el costo estimado.','ok');
   document.getElementById('form-solicitud').reset();
   document.querySelectorAll('input[name="prioridad"]').forEach(r => r.checked = false);
@@ -291,10 +367,7 @@ function renderRevision() {
   const prioridad= document.getElementById('rev-filter-prioridad').value;
 
   let sols = DB.sols();
-
-  // jefes de área: solo ven su área
   if (CU.role === 'jefe_area') sols = sols.filter(s => s.areaCode === CU.areaCode);
-
   if (area)      sols = sols.filter(s => s.areaCode  === area);
   if (estado)    sols = sols.filter(s => s.estado    === estado);
   if (motivo)    sols = sols.filter(s => s.motivo    === motivo);
@@ -302,10 +375,7 @@ function renderRevision() {
   if (q)         sols = sols.filter(s => srch(s, q));
   sols.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
 
-  // Stats
-  const all = DB.sols();
   document.getElementById('rev-stats').innerHTML = statsBar(sols);
-
   const el = document.getElementById('rev-lista');
   el.innerHTML = sols.length
     ? `<div class="sol-list">${sols.map(s => solCard(s, CU.role==='mantenimiento'||CU.role==='supervisor'||CU.role==='gerente')).join('')}</div>`
@@ -324,8 +394,7 @@ function statsBar(sols) {
 // ── AUTORIZACIÓN (Gerente de Planta) ──────────────────────
 function renderAutorizacion() {
   const sols = DB.sols().filter(s => s.estado === 'Valorizada').sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
-  const all  = DB.sols();
-  document.getElementById('auth-stats').innerHTML = statsBar(all);
+  document.getElementById('auth-stats').innerHTML = statsBar(DB.sols());
   const el = document.getElementById('auth-lista');
   el.innerHTML = sols.length
     ? `<div class="sol-list">${sols.map(s => solCard(s, true)).join('')}</div>`
@@ -427,19 +496,16 @@ function openModal(id) {
     ${s.foto ? `<div class="detail-foto"><img src="${s.foto}" alt="Fotografía de respaldo" /></div>` : ''}
   `;
 
-  // Sección costos (solo mantenimiento, solo si está Pendiente)
   const secCosto = document.getElementById('modal-costo-section');
   secCosto.style.display = (CU.role === 'mantenimiento' && s.estado === 'Pendiente') ? '' : 'none';
   if (secCosto.style.display !== 'none') {
     document.getElementById('modal-costo').value      = '';
     document.getElementById('modal-notas-mtt').value  = s.notasMtt || '';
-    // Restaurar estado radio según lo guardado (o 'no' por defecto)
     const radioSi  = document.getElementById('modal-activable-si');
     const radioNo  = document.getElementById('modal-activable-no');
     if (s.esActivable) { radioSi.checked = true; } else { radioNo.checked = true; }
   }
 
-  // Sección autorización (solo gerente, solo si está Valorizada)
   const secAuth = document.getElementById('modal-auth-section');
   secAuth.style.display = (CU.role === 'gerente' && s.estado === 'Valorizada') ? '' : 'none';
   if (secAuth.style.display !== 'none') {
@@ -448,7 +514,6 @@ function openModal(id) {
     avisoEl.style.display = s.esActivable ? 'flex' : 'none';
   }
 
-  // Sección cambio de estado (gerente sobre solicitudes ya decididas)
   const secChange = document.getElementById('modal-change-section');
   secChange.style.display = (CU.role === 'gerente' && ['Autorizada','Postergada','Rechazada'].includes(s.estado)) ? '' : 'none';
   if (secChange.style.display !== 'none') {
@@ -465,21 +530,17 @@ function closeModal() {
 }
 
 // Guardar costo
-document.getElementById('btn-guardar-costo').addEventListener('click', () => {
+document.getElementById('btn-guardar-costo').addEventListener('click', async () => {
   const costo = parseFloat(document.getElementById('modal-costo').value);
   if (isNaN(costo) || costo < 0) { toast('Ingrese un costo válido.','err'); return; }
-  const notas      = document.getElementById('modal-notas-mtt').value.trim();
-  const activable  = document.querySelector('input[name="activable"]:checked')?.value === 'si';
-  const sols  = DB.sols();
-  const idx   = sols.findIndex(s => s.id === openSolId);
-  if (idx === -1) return;
-  sols[idx].costo       = costo;
-  sols[idx].notasMtt    = notas;
-  sols[idx].esActivable = activable;
-  sols[idx].estado      = 'Valorizada';
-  sols[idx].valorizedAt = new Date().toISOString();
-  sols[idx].updatedAt   = new Date().toISOString();
-  DB.saveSols(sols);
+  const notas     = document.getElementById('modal-notas-mtt').value.trim();
+  const activable = document.querySelector('input[name="activable"]:checked')?.value === 'si';
+  await DB.updateSol(openSolId, {
+    costo, notasMtt: notas, esActivable: activable,
+    estado: 'Valorizada',
+    valorizedAt: new Date().toISOString(),
+    updatedAt:   new Date().toISOString(),
+  });
   const msgActivable = activable ? ' · Marcado como ACTIVABLE (requerirá API o SIM).' : '';
   toast('Costo ingresado. Requerimiento enviado a autorización del Gerente de Planta.' + msgActivable, 'ok');
   closeModal();
@@ -487,25 +548,20 @@ document.getElementById('btn-guardar-costo').addEventListener('click', () => {
 });
 
 // Decisiones gerente
-function decidir(decision) {
+async function decidir(decision) {
   const comentario = document.getElementById('modal-comentario-gerente').value.trim();
-  const sols = DB.sols();
-  const idx  = sols.findIndex(s => s.id === openSolId);
-  if (idx === -1) return;
-  const sol = sols[idx];
-  sol.estado            = decision;
-  sol.comentarioGerente = comentario;
-  sol.decidedAt         = new Date().toISOString();
-  sol.updatedAt         = new Date().toISOString();
-  DB.saveSols(sols);
-
+  const sol = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+  await DB.updateSol(openSolId, {
+    estado:            decision,
+    comentarioGerente: comentario,
+    decidedAt:         new Date().toISOString(),
+    updatedAt:         new Date().toISOString(),
+  });
   toast(`Requerimiento ${decision.toLowerCase()} correctamente.`, decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn');
-
-  // Aviso especial si es activable y fue autorizado
   if (decision === 'Autorizada' && sol.esActivable) {
     setTimeout(() => showAvisoActivable(sol), 400);
   }
-
   closeModal();
   renderAutorizacion();
 }
@@ -525,17 +581,11 @@ function showAvisoActivable(sol) {
         <div class="aam-opciones">
           <div class="aam-opt aam-api">
             <span class="aam-opt-icon">📄</span>
-            <div>
-              <strong>API</strong>
-              <small>Acta de Pedido Interno</small>
-            </div>
+            <div><strong>API</strong><small>Acta de Pedido Interno</small></div>
           </div>
           <div class="aam-opt aam-sim">
             <span class="aam-opt-icon">📋</span>
-            <div>
-              <strong>SIM</strong>
-              <small>Solicitud de Inversión y Mantenimiento</small>
-            </div>
+            <div><strong>SIM</strong><small>Solicitud de Inversión y Mantenimiento</small></div>
           </div>
         </div>
         <p class="aam-nota">Comuníquese con Mantenimiento para iniciar el proceso según el tipo de activable.</p>
@@ -548,21 +598,21 @@ function showAvisoActivable(sol) {
   document.getElementById('aam-cerrar').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
+
 document.getElementById('btn-autorizar').addEventListener('click',  () => decidir('Autorizada'));
 document.getElementById('btn-postergar').addEventListener('click',  () => decidir('Postergada'));
 document.getElementById('btn-rechazar').addEventListener('click',   () => decidir('Rechazada'));
 
-// Cambiar estado (gerente sobre solicitudes ya decididas)
-document.getElementById('btn-cambiar-estado').addEventListener('click', () => {
+document.getElementById('btn-cambiar-estado').addEventListener('click', async () => {
   const nuevoEstado = document.getElementById('modal-nuevo-estado').value;
   const comentario  = document.getElementById('modal-comentario-cambio').value.trim();
-  const sols = DB.sols();
-  const idx  = sols.findIndex(s => s.id === openSolId);
-  if (idx === -1) return;
-  sols[idx].estado            = nuevoEstado;
-  sols[idx].comentarioGerente = comentario || sols[idx].comentarioGerente;
-  sols[idx].updatedAt         = new Date().toISOString();
-  DB.saveSols(sols);
+  const sol = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+  await DB.updateSol(openSolId, {
+    estado:            nuevoEstado,
+    comentarioGerente: comentario || sol.comentarioGerente,
+    updatedAt:         new Date().toISOString(),
+  });
   toast('Estado actualizado.', 'ok');
   closeModal();
   renderRevision();
@@ -588,15 +638,14 @@ function renderVisual() {
     }
   });
 
-  const labels = AREA_KEYS.map(k => AREA_LABELS[k]);
+  const labels  = AREA_KEYS.map(k => AREA_LABELS[k]);
   const cntData = AREA_KEYS.map(k => counts[k]);
   const costData= AREA_KEYS.map(k => costs[k]);
 
-  // Destroy prev
   if (chartCount) { chartCount.destroy(); chartCount = null; }
   if (chartCost)  { chartCost.destroy();  chartCost  = null; }
 
-  const pieOpts = (title) => ({
+  const pieOpts = () => ({
     responsive: true, maintainAspectRatio: false,
     plugins: {
       legend: { position:'right', labels:{ font:{family:'Montserrat',size:11}, boxWidth:14, padding:10 } },
@@ -616,7 +665,6 @@ function renderVisual() {
     options: { ...pieOpts(), plugins: { ...pieOpts().plugins, tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${clp(ctx.parsed)}` } } } }
   });
 
-  // Tabla resumen
   const rows = AREA_KEYS.map((k,i) => `
     <tr>
       <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${AREA_COLORS[i]};margin-right:6px"></span>${AREA_LABELS[k]}</td>
@@ -631,12 +679,7 @@ function renderVisual() {
   document.getElementById('visual-table').innerHTML = `
     <table class="visual-table">
       <thead>
-        <tr>
-          <th>Área</th>
-          <th>N° Solicitudes</th>
-          <th>Costo Total</th>
-          <th>Costo Promedio</th>
-        </tr>
+        <tr><th>Área</th><th>N° Solicitudes</th><th>Costo Total</th><th>Costo Promedio</th></tr>
       </thead>
       <tbody>
         ${rows}
