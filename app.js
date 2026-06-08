@@ -1206,7 +1206,7 @@ function openNotifPanel() {
   const notifs = _cache.notifs.slice().sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   list.innerHTML = notifs.length
     ? notifs.map(n => `
-        <div class="notif-item${n.esActivable ? ' notif-activable' : ''}">
+        <div class="notif-item${n.esActivable ? ' notif-activable' : ''} notif-clickable" data-solid="${n.solicitudId||''}" data-docid="${n.docId}">
           <div class="notif-icon">${n.icon||'🔔'}</div>
           <div class="notif-body">
             <div class="notif-msg">${n.message}</div>
@@ -1215,6 +1215,32 @@ function openNotifPanel() {
           <button class="notif-mark-read" data-docid="${n.docId}" title="Marcar como leído">✕</button>
         </div>`).join('')
     : '<p class="notif-empty">Sin notificaciones nuevas.</p>';
+
+  // Clic en notificación → abrir modal de la solicitud y marcarla como leída
+  list.querySelectorAll('.notif-clickable').forEach(item => {
+    item.addEventListener('click', async e => {
+      if (e.target.classList.contains('notif-mark-read')) return; // no interceptar el ✕
+      const solId  = item.dataset.solid;
+      const docId  = item.dataset.docid;
+      panel.style.display = 'none';
+      if (solId) {
+        // Marcar como leída al abrir
+        fdb.collection('notificaciones').doc(docId).update({ read: true }).catch(console.error);
+        // Navegar a la pestaña correcta según rol antes de abrir el modal
+        const tabMap = {
+          admin:         'revision',
+          mantenimiento: 'costos',
+          gerente:       'autorizacion',
+          supervisor:    'revision',
+          jefe_area:     'revision',
+        };
+        const targetTab = tabMap[CU.role] || 'revision';
+        activateTab(targetTab);
+        // Pequeña espera para que el render de la pestaña termine
+        setTimeout(() => openModal(solId), 80);
+      }
+    });
+  });
 
   list.querySelectorAll('.notif-mark-read').forEach(btn => {
     btn.addEventListener('click', async e => {
