@@ -93,6 +93,37 @@ let openSolId = null;
 let chartCount = null, chartCost = null;
 let _activeTab = null;
 
+// ── Paginación ─────────────────────────────────────────────
+const PAGE_SIZE = 20;
+const _pag = { mis:1, costos:1, revision:1, autorizacion:1 };
+
+function pagSlice(arr, page) {
+  return arr.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+}
+function pagHTML(total, page, tabKey) {
+  if (total <= PAGE_SIZE) return '';
+  const pages = Math.ceil(total / PAGE_SIZE);
+  return `<div class="pag-controls">
+    <button onclick="_pag['${tabKey}']=${page-1};reRenderActive()" ${page<=1?'disabled':''}>← Anterior</button>
+    <span class="pag-info">Página ${page} de ${pages}</span>
+    <span style="color:var(--gray);font-size:.8rem">${total} resultados</span>
+    <button onclick="_pag['${tabKey}']=${page+1};reRenderActive()" ${page>=pages?'disabled':''}>Siguiente →</button>
+  </div>`;
+}
+
+// ── Modo oscuro ─────────────────────────────────────────────
+function toggleDarkMode() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('btn-dark-mode').textContent = isDark ? '🌙' : '☀️';
+  localStorage.setItem('theme', isDark ? 'light' : 'dark');
+}
+// Restaurar tema al cargar
+(function() {
+  const saved = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+})();
+
 // ── Toast ──────────────────────────────────────────────────
 function toast(msg, type='') {
   const t = document.getElementById('toast');
@@ -117,6 +148,7 @@ function reRenderActive() {
   if (_activeTab === 'autorizacion') renderAutorizacion();
   if (_activeTab === 'visual')       renderVisual();
   if (_activeTab === 'adminpanel')   renderAdminPanel();
+  if (_activeTab === 'kpis')         renderKPIs();
 }
 
 // ── Listeners en tiempo real ───────────────────────────────
@@ -213,7 +245,7 @@ const TABS = {
   mantenimiento:[['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['costos','Gestión de Costos'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
   supervisor:   [['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
   gerente:      [['autorizacion','Autorización Pendiente'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
-  admin:        [['revision','Revisión de Solicitudes'],['visual','Gestión Visual'],['adminpanel','⚙️ Gestión de Usuarios']],
+  admin:        [['revision','Revisión de Solicitudes'],['visual','Gestión Visual'],['kpis','📊 KPIs'],['adminpanel','⚙️ Gestión de Usuarios']],
 };
 
 function buildTabs() {
@@ -238,6 +270,7 @@ function activateTab(id) {
   if (id === 'autorizacion') renderAutorizacion();
   if (id === 'visual')       renderVisual();
   if (id === 'adminpanel')   renderAdminPanel();
+  if (id === 'kpis')         renderKPIs();
 }
 
 // ── Login ──────────────────────────────────────────────────
@@ -359,6 +392,9 @@ function initDashboard() {
   document.getElementById('nav-avatar').textContent = initials(CU.name);
   document.getElementById('nav-name').textContent   = CU.name;
   document.getElementById('nav-area').textContent   = CU.title || CU.areaGroup || '';
+  // Sincronizar ícono modo oscuro
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.getElementById('btn-dark-mode').textContent = isDark ? '☀️' : '🌙';
 
   // Botón de notificaciones: visible para mantenimiento
   const btnNotif = document.getElementById('btn-notif');
@@ -446,6 +482,8 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
     costo: null,
     notasMtt: '',
     comentarioGerente: '',
+    comentarios: [],
+    historial: [{ fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role, accion: 'Ingresada', detalle: `Prioridad: ${document.querySelector('input[name="prioridad"]:checked')?.value||''}`, tipo:'ok' }],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     valorizedAt: null,
@@ -469,9 +507,11 @@ function renderMis() {
   let   sols = DB.sols().filter(s => s.userId === CU.id);
   if (q) sols = sols.filter(s => srch(s, q));
   sols.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  if (_pag.mis > Math.ceil(sols.length/PAGE_SIZE) || sols.length === 0) _pag.mis = 1;
+  const page = pagSlice(sols, _pag.mis);
   const el = document.getElementById('mis-lista');
   el.innerHTML = sols.length
-    ? `<div class="sol-list">${sols.map(s => solCard(s)).join('')}</div>`
+    ? `<div class="sol-list">${page.map(s => solCard(s)).join('')}</div>${pagHTML(sols.length,_pag.mis,'mis')}`
     : '<p class="empty-msg">No tiene solicitudes registradas aún.</p>';
   attachCards(el);
 }
@@ -487,16 +527,24 @@ function renderCostos() {
   if (estado) sols = sols.filter(s => s.estado === estado);
   if (q)      sols = sols.filter(s => srch(s, q));
   sols.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  if (_pag.costos > Math.ceil(sols.length/PAGE_SIZE) || sols.length === 0) _pag.costos = 1;
+  const page = pagSlice(sols, _pag.costos);
   const el = document.getElementById('costos-lista');
   el.innerHTML = sols.length
-    ? `<div class="sol-list">${sols.map(s => solCard(s, true)).join('')}</div>`
+    ? `<div class="sol-list">${page.map(s => solCard(s, true)).join('')}</div>${pagHTML(sols.length,_pag.costos,'costos')}`
     : '<p class="empty-msg">No hay solicitudes que coincidan.</p>';
   attachCards(el);
 }
 
 // ── REVISIÓN DE SOLICITUDES ────────────────────────────────
-['rev-search','rev-filter-area','rev-filter-estado','rev-filter-motivo','rev-filter-prioridad'].forEach(id => {
-  document.getElementById(id).addEventListener(id==='rev-search'?'input':'change', renderRevision);
+['rev-search','rev-filter-area','rev-filter-estado','rev-filter-motivo','rev-filter-prioridad','rev-fecha-desde','rev-fecha-hasta'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(id==='rev-search'?'input':'change', () => { _pag.revision=1; renderRevision(); });
+});
+document.getElementById('btn-rev-clear-dates').addEventListener('click', () => {
+  document.getElementById('rev-fecha-desde').value = '';
+  document.getElementById('rev-fecha-hasta').value = '';
+  _pag.revision = 1; renderRevision();
 });
 
 function renderRevision() {
@@ -505,6 +553,8 @@ function renderRevision() {
   const estado   = document.getElementById('rev-filter-estado').value;
   const motivo   = document.getElementById('rev-filter-motivo').value;
   const prioridad= document.getElementById('rev-filter-prioridad').value;
+  const desde    = document.getElementById('rev-fecha-desde').value;
+  const hasta    = document.getElementById('rev-fecha-hasta').value;
 
   let sols = DB.sols();
   if (CU.role === 'jefe_area') sols = sols.filter(s => s.areaCode === CU.areaCode);
@@ -512,13 +562,18 @@ function renderRevision() {
   if (estado)    sols = sols.filter(s => s.estado    === estado);
   if (motivo)    sols = sols.filter(s => s.motivo    === motivo);
   if (prioridad) sols = sols.filter(s => s.prioridad === prioridad);
+  if (desde)     sols = sols.filter(s => s.createdAt >= desde);
+  if (hasta)     sols = sols.filter(s => s.createdAt <= hasta + 'T23:59:59');
   if (q)         sols = sols.filter(s => srch(s, q));
   sols.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
 
+  if (_pag.revision > Math.ceil(sols.length/PAGE_SIZE) || sols.length === 0) _pag.revision = 1;
+  const page = pagSlice(sols, _pag.revision);
   document.getElementById('rev-stats').innerHTML = statsBar(sols);
   const el = document.getElementById('rev-lista');
+  const showCost = ['mantenimiento','supervisor','gerente','admin'].includes(CU.role);
   el.innerHTML = sols.length
-    ? `<div class="sol-list">${sols.map(s => solCard(s, CU.role==='mantenimiento'||CU.role==='supervisor'||CU.role==='gerente')).join('')}</div>`
+    ? `<div class="sol-list">${page.map(s => solCard(s, showCost)).join('')}</div>${pagHTML(sols.length,_pag.revision,'revision')}`
     : '<p class="empty-msg">No hay solicitudes que coincidan con los filtros.</p>';
   attachCards(el);
 }
@@ -535,9 +590,11 @@ function statsBar(sols) {
 function renderAutorizacion() {
   const sols = DB.sols().filter(s => ['Pendiente','Valorizada'].includes(s.estado)).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
   document.getElementById('auth-stats').innerHTML = statsBar(DB.sols());
+  if (_pag.autorizacion > Math.ceil(sols.length/PAGE_SIZE) || sols.length === 0) _pag.autorizacion = 1;
+  const page = pagSlice(sols, _pag.autorizacion);
   const el = document.getElementById('auth-lista');
   el.innerHTML = sols.length
-    ? `<div class="sol-list">${sols.map(s => solCard(s, true)).join('')}</div>`
+    ? `<div class="sol-list">${page.map(s => solCard(s, true)).join('')}</div>${pagHTML(sols.length,_pag.autorizacion,'autorizacion')}`
     : '<p class="empty-msg">No hay requerimientos pendientes de autorización.</p>';
   attachCards(el);
 }
@@ -664,9 +721,42 @@ function openModal(id) {
 
   // Botón eliminar: autor si Pendiente, o admin siempre
   const canDelete = CU.role === 'admin' || (s.userId === CU.id && s.estado === 'Pendiente');
-  const btnDel = document.getElementById('btn-eliminar-sol');
-  btnDel.style.display = canDelete ? '' : 'none';
+  document.getElementById('btn-eliminar-sol').style.display = canDelete ? '' : 'none';
 
+  // Historial
+  const histEl = document.getElementById('modal-historial-section');
+  const histList = document.getElementById('modal-historial-list');
+  const hist = (s.historial || []).slice().sort((a,b) => a.fecha.localeCompare(b.fecha));
+  if (hist.length > 0) {
+    histEl.style.display = '';
+    histList.innerHTML = hist.map(h => `
+      <div class="historial-item">
+        <div class="historial-dot dot-${h.tipo||'ok'}"></div>
+        <div class="historial-body">
+          <div class="historial-accion">${esc(h.accion)}</div>
+          ${h.detalle ? `<div class="historial-detalle">${esc(h.detalle)}</div>` : ''}
+          <div class="historial-meta">👤 ${esc(h.usuario)} · ${fmt(h.fecha)}</div>
+        </div>
+      </div>`).join('');
+  } else {
+    histEl.style.display = 'none';
+  }
+
+  // Comentarios
+  const comsList = document.getElementById('modal-comentarios-list');
+  const coms = (s.comentarios || []).slice().sort((a,b) => a.fecha.localeCompare(b.fecha));
+  comsList.innerHTML = coms.length
+    ? coms.map(c => `
+        <div class="comentario-item">
+          <div class="comentario-header">
+            <span><span class="comentario-autor">${esc(c.userName)}</span><span class="comentario-rol">${ROLE_LABELS[c.userRole]||c.userRole||''}</span></span>
+            <span class="comentario-fecha">${fmt(c.fecha)}</span>
+          </div>
+          <div class="comentario-texto">${esc(c.texto)}</div>
+        </div>`).join('')
+    : '<p style="font-size:.82rem;color:var(--gray);padding:4px 0">Sin comentarios aún.</p>';
+
+  document.getElementById('comentario-texto').value = '';
   document.getElementById('modal-overlay').style.display = 'flex';
 }
 
@@ -674,6 +764,31 @@ function closeModal() {
   document.getElementById('modal-overlay').style.display = 'none';
   openSolId = null;
 }
+
+// Agregar comentario
+document.getElementById('btn-add-comentario').addEventListener('click', async () => {
+  const texto = document.getElementById('comentario-texto').value.trim();
+  if (!texto) { toast('Escriba un comentario antes de agregar.','err'); return; }
+  const comentario = { id: uid(), userId: CU.id, userName: CU.name, userRole: CU.role, texto, fecha: new Date().toISOString() };
+  await DB.updateSol(openSolId, {
+    comentarios: firebase.firestore.FieldValue.arrayUnion(comentario)
+  });
+  document.getElementById('comentario-texto').value = '';
+  // Re-render comentarios en modal
+  const s = DB.sols().find(x => x.id === openSolId);
+  if (s) {
+    const coms = [...(s.comentarios||[]), comentario].sort((a,b)=>a.fecha.localeCompare(b.fecha));
+    document.getElementById('modal-comentarios-list').innerHTML = coms.map(c => `
+      <div class="comentario-item">
+        <div class="comentario-header">
+          <span><span class="comentario-autor">${esc(c.userName)}</span><span class="comentario-rol">${ROLE_LABELS[c.userRole]||''}</span></span>
+          <span class="comentario-fecha">${fmt(c.fecha)}</span>
+        </div>
+        <div class="comentario-texto">${esc(c.texto)}</div>
+      </div>`).join('');
+  }
+  toast('Comentario agregado.','ok');
+});
 
 // Eliminar solicitud
 document.getElementById('btn-eliminar-sol').addEventListener('click', async () => {
@@ -700,6 +815,10 @@ document.getElementById('btn-guardar-costo').addEventListener('click', async () 
     estado: 'Valorizada',
     valorizedAt: new Date().toISOString(),
     updatedAt:   new Date().toISOString(),
+    historial: firebase.firestore.FieldValue.arrayUnion({
+      fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+      accion: 'Valorizada', detalle: `Costo: ${clp(costo)}${notas ? ' · '+notas : ''}${activable ? ' · Activable' : ''}`, tipo:'ok'
+    }),
   });
   const msgActivable = activable ? ' · Marcado como ACTIVABLE (requerirá API o SIM).' : '';
   toast('Costo ingresado. Requerimiento enviado a autorización del Gerente de Planta.' + msgActivable, 'ok');
@@ -712,11 +831,16 @@ async function decidir(decision) {
   const comentario = document.getElementById('modal-comentario-gerente').value.trim();
   const sol = DB.sols().find(s => s.id === openSolId);
   if (!sol) return;
+  const tipoHist = decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn';
   await DB.updateSol(openSolId, {
     estado:            decision,
     comentarioGerente: comentario,
     decidedAt:         new Date().toISOString(),
     updatedAt:         new Date().toISOString(),
+    historial: firebase.firestore.FieldValue.arrayUnion({
+      fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+      accion: decision, detalle: comentario || '', tipo: tipoHist
+    }),
   });
   toast(`Requerimiento ${decision.toLowerCase()} correctamente.`, decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn');
 
@@ -799,6 +923,10 @@ document.getElementById('btn-cambiar-estado').addEventListener('click', async ()
     estado:            nuevoEstado,
     comentarioGerente: comentario || sol.comentarioGerente,
     updatedAt:         new Date().toISOString(),
+    historial: firebase.firestore.FieldValue.arrayUnion({
+      fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+      accion: `Cambio a ${nuevoEstado}`, detalle: comentario || '', tipo:'warn'
+    }),
   });
   toast('Estado actualizado.', 'ok');
   closeModal();
@@ -980,6 +1108,98 @@ async function markAllNotifsRead() {
   await batch.commit();
   document.getElementById('notif-panel').style.display = 'none';
 }
+
+// ── KPIs ADMIN ────────────────────────────────────────────
+function renderKPIs() {
+  if (CU.role !== 'admin') return;
+  const sols = DB.sols();
+  const total = sols.length;
+  const pendiente  = sols.filter(s=>s.estado==='Pendiente').length;
+  const valorizada = sols.filter(s=>s.estado==='Valorizada').length;
+  const autorizada = sols.filter(s=>s.estado==='Autorizada').length;
+  const postergada = sols.filter(s=>s.estado==='Postergada').length;
+  const rechazada  = sols.filter(s=>s.estado==='Rechazada').length;
+  const activables = sols.filter(s=>s.esActivable).length;
+  const conCosto   = sols.filter(s=>s.costo!=null);
+  const totalCosto = conCosto.reduce((a,s)=>a+Number(s.costo),0);
+  const tasaAprobacion = autorizada+rechazada+postergada > 0
+    ? Math.round(autorizada/(autorizada+rechazada+postergada)*100) : 0;
+
+  // Tiempo promedio resolución (días)
+  const resueltas = sols.filter(s=>s.decidedAt&&s.createdAt);
+  const tiempoPromedio = resueltas.length > 0
+    ? Math.round(resueltas.reduce((a,s)=>{
+        const diff = (new Date(s.decidedAt)-new Date(s.createdAt))/(1000*60*60*24);
+        return a+diff;
+      },0)/resueltas.length)
+    : null;
+
+  // Por solicitante
+  const porUser = {};
+  sols.forEach(s=>{ porUser[s.userName]=(porUser[s.userName]||0)+1; });
+  const topUsers = Object.entries(porUser).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  // Por área
+  const porArea = {};
+  sols.forEach(s=>{ const k=s.areaGroup||'Sin área'; porArea[k]=(porArea[k]||0)+1; });
+  const topAreas = Object.entries(porArea).sort((a,b)=>b[1]-a[1]);
+
+  document.getElementById('kpis-content').innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-value">${total}</div><div class="kpi-label">Total solicitudes</div></div>
+      <div class="kpi-card"><div class="kpi-value" style="color:#d97706">${pendiente}</div><div class="kpi-label">Pendientes</div></div>
+      <div class="kpi-card"><div class="kpi-value" style="color:#16a34a">${autorizada}</div><div class="kpi-label">Autorizadas</div></div>
+      <div class="kpi-card"><div class="kpi-value" style="color:#dc2626">${rechazada}</div><div class="kpi-label">Rechazadas</div></div>
+      <div class="kpi-card"><div class="kpi-value">${tasaAprobacion}%</div><div class="kpi-label">Tasa de aprobación</div><div class="kpi-sub">sobre decididas</div></div>
+      <div class="kpi-card"><div class="kpi-value" style="color:var(--orange)">${activables}</div><div class="kpi-label">Activables</div></div>
+      <div class="kpi-card"><div class="kpi-value" style="font-size:1.2rem">${totalCosto>0?clp(totalCosto):'—'}</div><div class="kpi-label">Costo total comprometido</div></div>
+      <div class="kpi-card"><div class="kpi-value">${tiempoPromedio!=null?tiempoPromedio+' días':'—'}</div><div class="kpi-label">Tiempo prom. resolución</div></div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="kpi-section-title">Solicitudes por usuario</div>
+      <table class="kpi-table">
+        <thead><tr><th>Usuario</th><th>N° Solicitudes</th><th>%</th></tr></thead>
+        <tbody>${topUsers.map(([name,cnt])=>`<tr><td>${esc(name)}</td><td>${cnt}</td><td>${total>0?Math.round(cnt/total*100):0}%</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="kpi-section-title">Solicitudes por área</div>
+      <table class="kpi-table">
+        <thead><tr><th>Área</th><th>N° Solicitudes</th><th>%</th></tr></thead>
+        <tbody>${topAreas.map(([area,cnt])=>`<tr><td>${esc(area)}</td><td>${cnt}</td><td>${total>0?Math.round(cnt/total*100):0}%</td></tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── EXPORTAR EXCEL / PDF ──────────────────────────────────
+document.getElementById('btn-export-excel').addEventListener('click', () => {
+  const sols = DB.sols();
+  const rows = sols.map(s => ({
+    'Ticket':      s.ticket||'',
+    'Título':      s.titulo,
+    'Área':        s.areaGroup,
+    'Sub-área':    s.areaSub,
+    'Motivo':      s.motivo,
+    'Prioridad':   s.prioridad,
+    'Estado':      s.estado,
+    'Solicitante': s.userName,
+    'Costo (CLP)': s.costo!=null?Number(s.costo):'',
+    'Activable':   s.esActivable?'Sí':'No',
+    'Fecha ingreso': fmtD(s.createdAt),
+    'Fecha decisión': s.decidedAt?fmtD(s.decidedAt):'',
+    'Comentario Gerencia': s.comentarioGerente||'',
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Solicitudes');
+  const today = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `solicitudes_sopraval_${today}.xlsx`);
+  toast('Archivo Excel descargado.', 'ok');
+});
+
+document.getElementById('btn-export-pdf').addEventListener('click', () => {
+  window.print();
+});
 
 // ── PANEL ADMINISTRACIÓN (solo admin) ─────────────────────
 const ROLE_LABELS = {

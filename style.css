@@ -922,3 +922,131 @@ body {
   .auth-card { padding:32px 22px; }
 }
 
+/* ══════════════════ MODO OSCURO ══════════════════ */
+[data-theme="dark"] {
+  --bg:         #0f1117;
+  --blue:       #2A4A9B;
+  --blue-dk:    #1B3580;
+  --blue-lt:    #1a2540;
+  --blue-mid:   #3A5ABB;
+  --white:      #1e2130;
+  --gray:       #9ca3af;
+  --gray-lt:    #1e2130;
+  --border:     #2e3450;
+  --text:       #e2e8f0;
+  --pendiente-bg:#2d2a1a; --pendiente-tx:#fbbf24;
+  --valorizada-bg:#1a2040; --valorizada-tx:#93c5fd;
+  --autorizada-bg:#1a2d1a; --autorizada-tx:#86efac;
+  --postergada-bg:#2d2516; --postergada-tx:#fcd34d;
+  --rechazada-bg:#2d1a1a;  --rechazada-tx:#fca5a5;
+}
+[data-theme="dark"] body        { background:var(--bg); color:var(--text); }
+[data-theme="dark"] .card       { background:#1e2336; border-color:var(--border); }
+[data-theme="dark"] .navbar     { background:#1B3580; }
+[data-theme="dark"] .auth-card  { background:#1e2336; }
+[data-theme="dark"] .field input,
+[data-theme="dark"] .field textarea,
+[data-theme="dark"] .field select,
+[data-theme="dark"] .search-box,
+[data-theme="dark"] .filter-select { background:#151929; color:#e2e8f0; border-color:#2e3450; }
+[data-theme="dark"] .sol-card   { background:#1e2336; border-color:#2e3450; }
+[data-theme="dark"] .sol-card:hover { background:#252b42; }
+[data-theme="dark"] .modal      { background:#1e2336; color:#e2e8f0; }
+[data-theme="dark"] .modal-section { background:#151929; }
+[data-theme="dark"] .detail-label { color:#9ca3af; }
+[data-theme="dark"] .tab-btn    { color:#9ca3af; }
+[data-theme="dark"] .tab-btn.active { color:#fff; border-bottom-color:#F07B1B; }
+[data-theme="dark"] .visual-table th { background:#1B3580; }
+[data-theme="dark"] .visual-table td { border-color:#2e3450; }
+[data-theme="dark"] .admin-table th  { background:#1B3580; }
+[data-theme="dark"] .admin-table td  { border-color:#2e3450; background:#1e2336; }
+[data-theme="dark"] .page-header h1  { color:#e2e8f0; }
+[data-theme="dark"] .page-header p   { color:#9ca3af; }
+
+.btn-dark-mode {
+  background:transparent; border:1.5px solid rgba(255,255,255,.5);
+  border-radius:20px; color:#fff; font-size:.9rem;
+  padding:5px 10px; cursor:pointer; transition:all .18s; margin-right:6px;
+}
+.btn-dark-mode:hover { background:rgba(255,255,255,.15); border-color:#fff; }
+
+/* ══════════════════ PAGINACIÓN ══════════════════ */
+.pag-controls {
+  display:flex; align-items:center; justify-content:center;
+  gap:12px; padding:18px 0 4px; font-size:.84rem; color:var(--gray);
+}
+.pag-controls button {
+  padding:5px 14px; background:var(--white); border:1.5px solid var(--border);
+  border-radius:var(--radius-sm); cursor:pointer; font-size:.82rem;
+  font-weight:600; transition:all .15s;
+}
+.pag-controls button:hover:not(:disabled) { background:var(--blue-lt); border-color:var(--blue); color:var(--blue); }
+.pag-controls button:disabled { opacity:.4; cursor:not-allowed; }
+.pag-info { font-weight:600; color:var(--blue); }
+.btn-sm { padding:5px 12px; font-size:.8rem; }
+
+/* ══════════════════ HISTORIAL ══════════════════ */
+.historial-list { display:flex; flex-direction:column; gap:0; }
+.historial-item {
+  display:flex; gap:12px; padding:10px 0;
+  border-bottom:1px dashed var(--border); font-size:.82rem;
+}
+.historial-item:last-child { border-bottom:none; }
+.historial-dot {
+  width:10px; height:10px; border-radius:50%;
+  background:var(--blue); flex-shrink:0; margin-top:4px;
+  box-shadow:0 0 0 3px var(--blue-lt);
+}
+.historial-dot.dot-ok     { background:#16a34a; box-shadow:0 0 0 3px #dcfce7; }
+.historial-dot.dot-warn   { background:#d97706; box-shadow:0 0 0 3px #fef3c7; }
+.historial-dot.dot-err    { background:#dc2626; box-shadow:0 0 0 3px #fee2e2; }
+.historial-body { flex:1; }
+.historial-accion { font-weight:700; color:var(--blue); }
+.historial-detalle { color:var(--gray); margin-top:2px; }
+.historial-meta { font-size:.74rem; color:var(--gray); margin-top:2px; }
+
+/* ══════════════════ COMENTARIOS ══════════════════ */
+.comentarios-list { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+.comentario-item {
+  background:var(--blue-lt); border-radius:var(--radius-sm);
+  padding:10px 14px; font-size:.83rem;
+}
+[data-theme="dark"] .comentario-item { background:#1a2540; }
+.comentario-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.comentario-autor  { font-weight:700; color:var(--blue); font-size:.8rem; }
+.comentario-rol    { font-size:.73rem; color:var(--gray); margin-left:6px; }
+.comentario-fecha  { font-size:.73rem; color:var(--gray); }
+.comentario-texto  { color:var(--text,#222); line-height:1.45; }
+.comentario-form   { display:flex; gap:8px; align-items:flex-end; margin-top:4px; }
+.comentario-form textarea {
+  flex:1; padding:8px 12px; border:1.5px solid var(--border);
+  border-radius:var(--radius-sm); font-family:var(--font); font-size:.83rem;
+  resize:vertical; min-height:52px;
+}
+[data-theme="dark"] .comentario-form textarea { background:#151929; color:#e2e8f0; border-color:#2e3450; }
+
+/* ══════════════════ KPI CARDS ══════════════════ */
+.kpi-grid {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:16px; margin-bottom:24px;
+}
+.kpi-card {
+  background:var(--white); border-radius:var(--radius);
+  padding:20px 22px; border:1px solid var(--border);
+  box-shadow:var(--shadow-sm); text-align:center;
+}
+[data-theme="dark"] .kpi-card { background:#1e2336; border-color:#2e3450; }
+.kpi-value { font-size:2rem; font-weight:800; color:var(--blue); line-height:1; }
+.kpi-label { font-size:.8rem; color:var(--gray); margin-top:6px; text-transform:uppercase; letter-spacing:.5px; font-weight:600; }
+.kpi-sub   { font-size:.75rem; color:var(--gray); margin-top:3px; }
+.kpi-section-title { font-size:.9rem; font-weight:700; color:var(--blue); margin:20px 0 10px; text-transform:uppercase; letter-spacing:.5px; }
+.kpi-table { width:100%; border-collapse:collapse; font-size:.83rem; }
+.kpi-table th { background:var(--blue); color:#fff; padding:8px 12px; text-align:left; }
+.kpi-table td { padding:7px 12px; border-bottom:1px solid var(--border); }
+.kpi-table tr:hover td { background:var(--blue-lt); }
+[data-theme="dark"] .kpi-table td { background:#1e2336; border-color:#2e3450; }
+[data-theme="dark"] .kpi-table tr:hover td { background:#252b42; }
+
+/* ══════════════════ FILTROS FECHA ══════════════════ */
+input[type="date"].filter-select { min-width:140px; }
+

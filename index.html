@@ -200,6 +200,7 @@
           </div>
         </div>
         <button id="btn-cambiar-pass" class="btn-nav-pass" title="Cambiar contraseña">🔑 Mi cuenta</button>
+        <button id="btn-dark-mode" class="btn-dark-mode" onclick="toggleDarkMode()" title="Modo oscuro / claro">🌙</button>
         <button id="btn-logout" class="btn-logout">⏻ Salir</button>
       </div>
     </nav>
@@ -419,6 +420,9 @@
               <option value="Media">🟡 Media</option>
               <option value="Baja">🟢 Baja</option>
             </select>
+            <input type="date" id="rev-fecha-desde" class="filter-select" title="Desde fecha" />
+            <input type="date" id="rev-fecha-hasta" class="filter-select" title="Hasta fecha" />
+            <button id="btn-rev-clear-dates" class="btn-secondary btn-sm" title="Limpiar fechas">✕ Fechas</button>
           </div>
           <div id="rev-stats" class="stats-bar"></div>
           <div id="rev-lista"></div>
@@ -454,7 +458,13 @@
           </div>
         </div>
         <div class="card" style="margin-top:24px">
-          <h2 style="margin-bottom:16px">Resumen por Área</h2>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <h2>Resumen por Área</h2>
+            <div style="display:flex;gap:8px">
+              <button id="btn-export-excel" class="btn-secondary">📊 Exportar Excel</button>
+              <button id="btn-export-pdf" class="btn-secondary">🖨️ Imprimir / PDF</button>
+            </div>
+          </div>
           <div id="visual-table"></div>
         </div>
       </div>
@@ -472,6 +482,15 @@
           </div>
           <div id="admin-tabla"></div>
         </div>
+      </div>
+
+      <!-- TAB: KPIs ADMIN -->
+      <div class="tab-pane" id="pane-kpis">
+        <div class="page-header">
+          <h1>📊 Dashboard KPIs</h1>
+          <p>Indicadores clave de gestión del portal</p>
+        </div>
+        <div id="kpis-content"></div>
       </div>
 
     </div><!-- /dashboard-body -->
@@ -673,6 +692,22 @@
       </div>
       <button id="btn-cambiar-estado" class="btn-primary">Guardar cambio</button>
     </div>
+
+    <!-- HISTORIAL DE CAMBIOS -->
+    <div id="modal-historial-section" class="modal-section" style="display:none">
+      <h4>📋 Historial de cambios</h4>
+      <div id="modal-historial-list" class="historial-list"></div>
+    </div>
+
+    <!-- COMENTARIOS INTERNOS -->
+    <div class="modal-section">
+      <h4>💬 Comentarios internos</h4>
+      <div id="modal-comentarios-list" class="comentarios-list"></div>
+      <div class="comentario-form">
+        <textarea id="comentario-texto" rows="2" placeholder="Escriba un comentario visible para todos los roles..."></textarea>
+        <button id="btn-add-comentario" class="btn-primary btn-sm">Agregar</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -681,6 +716,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
