@@ -92,6 +92,7 @@ async function seedUsers() {
 let CU = null;
 let openSolId = null;
 let chartCount = null, chartCost = null;
+let chartTendencia = null, chartRankingAreas = null, chartComparativo = null;
 let _activeTab = null;
 
 // ── Paginación ─────────────────────────────────────────────
@@ -143,13 +144,17 @@ function showScreen(id) {
 // ── Re-render pestaña activa ───────────────────────────────
 function reRenderActive() {
   if (!CU || !_activeTab) return;
-  if (_activeTab === 'mis')          renderMis();
-  if (_activeTab === 'costos')       renderCostos();
-  if (_activeTab === 'revision')     renderRevision();
-  if (_activeTab === 'autorizacion') renderAutorizacion();
-  if (_activeTab === 'visual')       renderVisual();
-  if (_activeTab === 'adminpanel')   renderAdminPanel();
-  if (_activeTab === 'kpis')         renderKPIs();
+  if (_activeTab === 'home')           renderHome();
+  if (_activeTab === 'mis')            renderMis();
+  if (_activeTab === 'costos')         renderCostos();
+  if (_activeTab === 'revision')       renderRevision();
+  if (_activeTab === 'autorizacion')   renderAutorizacion();
+  if (_activeTab === 'visual')         renderVisual();
+  if (_activeTab === 'adminpanel')     renderAdminPanel();
+  if (_activeTab === 'kpis')           renderKPIs();
+  if (_activeTab === 'dashboard-ger')  renderDashboardGer();
+  if (_activeTab === 'dashboard-mtt')  renderDashboardMtt();
+  if (_activeTab === 'activables')     renderActivables();
 }
 
 // ── Listeners en tiempo real ───────────────────────────────
@@ -254,11 +259,11 @@ async function backfillNotificaciones() {
 
 // ── Tabs ───────────────────────────────────────────────────
 const TABS = {
-  user:         [['nueva','Nueva Solicitud'],['mis','Mis Solicitudes']],
-  jefe_area:    [['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['revision','Revisión de Solicitudes']],
-  mantenimiento:[['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['costos','Gestión de Costos'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
-  supervisor:   [['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
-  gerente:      [['autorizacion','Autorización Pendiente'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
+  user:         [['home','🏠 Inicio'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes']],
+  jefe_area:    [['home','🏠 Inicio'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['revision','Revisión de Solicitudes']],
+  mantenimiento:[['home','🏠 Inicio'],['dashboard-mtt','📊 Dashboard'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['costos','Gestión de Costos'],['revision','Revisión de Solicitudes'],['activables','🔧 Activables'],['visual','Gestión Visual']],
+  supervisor:   [['home','🏠 Inicio'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
+  gerente:      [['home','🏠 Inicio'],['dashboard-ger','📊 Mi Dashboard'],['autorizacion','Autorización Pendiente'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
   admin:        [['revision','Revisión de Solicitudes'],['visual','Gestión Visual'],['kpis','📊 KPIs'],['adminpanel','⚙️ Gestión de Usuarios']],
 };
 
@@ -278,13 +283,17 @@ function activateTab(id) {
   _activeTab = id;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.pane === id));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'pane-'+id));
-  if (id === 'mis')          renderMis();
-  if (id === 'costos')       renderCostos();
-  if (id === 'revision')     renderRevision();
-  if (id === 'autorizacion') renderAutorizacion();
-  if (id === 'visual')       renderVisual();
-  if (id === 'adminpanel')   renderAdminPanel();
-  if (id === 'kpis')         renderKPIs();
+  if (id === 'home')           renderHome();
+  if (id === 'mis')            renderMis();
+  if (id === 'costos')         renderCostos();
+  if (id === 'revision')       renderRevision();
+  if (id === 'autorizacion')   renderAutorizacion();
+  if (id === 'visual')         renderVisual();
+  if (id === 'adminpanel')     renderAdminPanel();
+  if (id === 'kpis')           renderKPIs();
+  if (id === 'dashboard-ger')  renderDashboardGer();
+  if (id === 'dashboard-mtt')  renderDashboardMtt();
+  if (id === 'activables')     renderActivables();
 }
 
 // ── Login ──────────────────────────────────────────────────
@@ -1038,6 +1047,294 @@ document.getElementById('btn-cambiar-estado').addEventListener('click', async ()
   renderRevision();
 });
 
+// ── HOME – RESUMEN GENERAL (todos los roles) ───────────────
+function renderHome() {
+  const sols = DB.sols();
+  const total      = sols.length;
+  const pendiente  = sols.filter(s => s.estado === 'Pendiente').length;
+  const valorizada = sols.filter(s => s.estado === 'Valorizada').length;
+  const autorizada = sols.filter(s => s.estado === 'Autorizada').length;
+  const postergada = sols.filter(s => s.estado === 'Postergada').length;
+  const rechazada  = sols.filter(s => s.estado === 'Rechazada').length;
+
+  let recientes;
+  if (['admin','mantenimiento','supervisor','gerente'].includes(CU.role)) {
+    recientes = [...sols].sort((a,b) => b.createdAt.localeCompare(a.createdAt)).slice(0,5);
+  } else if (CU.role === 'jefe_area') {
+    recientes = sols.filter(s => s.areaCode === CU.areaCode).sort((a,b) => b.createdAt.localeCompare(a.createdAt)).slice(0,5);
+  } else {
+    recientes = sols.filter(s => s.userId === CU.id).sort((a,b) => b.createdAt.localeCompare(a.createdAt)).slice(0,5);
+  }
+  const showCost = ['mantenimiento','supervisor','gerente','admin'].includes(CU.role);
+
+  const el = document.getElementById('home-content');
+  el.innerHTML = `
+    <div class="home-kpi-grid">
+      <div class="home-kpi-card">
+        <div class="home-kpi-icon">📋</div>
+        <div class="home-kpi-value">${total}</div>
+        <div class="home-kpi-label">Total solicitudes</div>
+      </div>
+      <div class="home-kpi-card hk-pendiente">
+        <div class="home-kpi-icon">⏳</div>
+        <div class="home-kpi-value">${pendiente}</div>
+        <div class="home-kpi-label">Pendientes</div>
+      </div>
+      <div class="home-kpi-card hk-valorizada">
+        <div class="home-kpi-icon">💰</div>
+        <div class="home-kpi-value">${valorizada}</div>
+        <div class="home-kpi-label">Valorizadas</div>
+      </div>
+      <div class="home-kpi-card hk-autorizada">
+        <div class="home-kpi-icon">✅</div>
+        <div class="home-kpi-value">${autorizada}</div>
+        <div class="home-kpi-label">Autorizadas</div>
+      </div>
+      <div class="home-kpi-card hk-postergada">
+        <div class="home-kpi-icon">⏸️</div>
+        <div class="home-kpi-value">${postergada}</div>
+        <div class="home-kpi-label">Postergadas</div>
+      </div>
+      <div class="home-kpi-card hk-rechazada">
+        <div class="home-kpi-icon">❌</div>
+        <div class="home-kpi-value">${rechazada}</div>
+        <div class="home-kpi-label">Rechazadas</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:24px">
+      <h3 style="margin-bottom:14px;font-size:1rem;font-weight:700">📋 Solicitudes recientes</h3>
+      ${recientes.length
+        ? `<div class="sol-list">${recientes.map(s => solCard(s, showCost)).join('')}</div>`
+        : '<p class="empty-msg">Sin solicitudes recientes.</p>'}
+    </div>`;
+  attachCards(el);
+}
+
+// ── DASHBOARD GERENTE ───────────────────────────────────────
+function renderDashboardGer() {
+  const sols = DB.sols();
+  const now  = new Date();
+
+  const pendientes = sols.filter(s => ['Pendiente','Valorizada'].includes(s.estado))
+    .sort((a,b) => a.createdAt.localeCompare(b.createdAt));
+
+  const decididas  = sols.filter(s => ['Autorizada','Postergada','Rechazada'].includes(s.estado));
+  const nAut = decididas.filter(s => s.estado === 'Autorizada').length;
+  const nPos = decididas.filter(s => s.estado === 'Postergada').length;
+  const nRec = decididas.filter(s => s.estado === 'Rechazada').length;
+  const tasa = nAut + nPos + nRec > 0 ? Math.round(nAut / (nAut + nPos + nRec) * 100) : 0;
+
+  const alta  = pendientes.filter(s => s.prioridad === 'Alta').length;
+  const media = pendientes.filter(s => s.prioridad === 'Media').length;
+  const baja  = pendientes.filter(s => s.prioridad === 'Baja').length;
+
+  const diasEspera = iso => Math.floor((now - new Date(iso)) / (1000*60*60*24));
+
+  const filas = pendientes.map(s => {
+    const dias = diasEspera(s.createdAt);
+    const clss = dias >= 7 ? 'dias-critico' : dias >= 3 ? 'dias-advertencia' : 'dias-ok';
+    return `<tr class="fila-link" onclick="activateTab('autorizacion');setTimeout(()=>openModal('${s.id}'),80)">
+      <td>${esc(s.ticket||'—')}</td>
+      <td>${esc(s.titulo)}</td>
+      <td>${esc(s.areaGroup)}</td>
+      <td>${{Alta:'🔴 Alta',Media:'🟡 Media',Baja:'🟢 Baja'}[s.prioridad]||s.prioridad}</td>
+      <td><span class="badge badge-${CSS.escape(s.estado)}">${s.estado}</span></td>
+      <td><span class="${clss}">${dias} día${dias!==1?'s':''}</span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dash-ger-content').innerHTML = `
+    <div class="dash-grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="dash-section-title">🚦 Pendientes por prioridad</div>
+        <div class="semaforo-grid">
+          <div class="semaforo-item sem-alta">
+            <div class="sem-value">${alta}</div>
+            <div class="sem-label">🔴 Alta</div>
+          </div>
+          <div class="semaforo-item sem-media">
+            <div class="sem-value">${media}</div>
+            <div class="sem-label">🟡 Media</div>
+          </div>
+          <div class="semaforo-item sem-baja">
+            <div class="sem-value">${baja}</div>
+            <div class="sem-label">🟢 Baja</div>
+          </div>
+        </div>
+        <div class="dash-total-pill">${pendientes.length} total pendiente${pendientes.length!==1?'s':''}</div>
+      </div>
+      <div class="card">
+        <div class="dash-section-title">📊 Mis decisiones históricas</div>
+        <div class="decision-grid">
+          <div class="decision-item dec-autorizada">
+            <div class="dec-value">${nAut}</div>
+            <div class="dec-label">Autorizadas</div>
+          </div>
+          <div class="decision-item dec-postergada">
+            <div class="dec-value">${nPos}</div>
+            <div class="dec-label">Postergadas</div>
+          </div>
+          <div class="decision-item dec-rechazada">
+            <div class="dec-value">${nRec}</div>
+            <div class="dec-label">Rechazadas</div>
+          </div>
+        </div>
+        <div class="dash-tasa-pill">Tasa de aprobación: <strong>${tasa}%</strong></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="dash-section-title">⏳ Solicitudes pendientes de decisión</div>
+      ${pendientes.length === 0
+        ? '<p class="empty-msg" style="margin-top:12px">✅ No hay solicitudes pendientes.</p>'
+        : `<div style="overflow-x:auto"><table class="kpi-table" style="margin-top:12px">
+            <thead><tr><th>Ticket</th><th>Título</th><th>Área</th><th>Prioridad</th><th>Estado</th><th>Días esperando</th></tr></thead>
+            <tbody>${filas}</tbody>
+          </table></div>`}
+    </div>`;
+}
+
+// ── DASHBOARD MANTENIMIENTO ─────────────────────────────────
+function renderDashboardMtt() {
+  const sols = DB.sols();
+  const now       = new Date();
+  const thisMon   = now.toISOString().slice(0,7);
+  const thisYear  = String(now.getFullYear());
+
+  const pendValorizar = sols.filter(s => s.estado === 'Pendiente').length;
+  const valorizada    = sols.filter(s => s.estado === 'Valorizada').length;
+  const autorizada    = sols.filter(s => s.estado === 'Autorizada').length;
+
+  const costoMes   = sols.filter(s => s.costo!=null && s.createdAt.startsWith(thisMon)).reduce((a,s)=>a+Number(s.costo),0);
+  const costoAnio  = sols.filter(s => s.costo!=null && s.createdAt.startsWith(thisYear)).reduce((a,s)=>a+Number(s.costo),0);
+  const costoTotal = sols.filter(s => s.costo!=null).reduce((a,s)=>a+Number(s.costo),0);
+
+  const conTiempo = sols.filter(s => s.valorizedAt && s.createdAt);
+  const tiempoProm = conTiempo.length > 0
+    ? (conTiempo.reduce((a,s) => a + (new Date(s.valorizedAt)-new Date(s.createdAt))/(1000*60*60*24), 0) / conTiempo.length).toFixed(1)
+    : null;
+
+  const activablesPend = sols.filter(s =>
+    s.esActivable && s.estado === 'Autorizada' &&
+    (!s.seguimientoActivable || s.seguimientoActivable === 'pendiente')
+  );
+
+  const filasAct = activablesPend.map(s => `
+    <tr class="fila-link" onclick="activateTab('activables')">
+      <td>${esc(s.ticket||'—')}</td>
+      <td>${esc(s.titulo)}</td>
+      <td>${esc(s.areaGroup)}</td>
+      <td>${s.costo!=null?clp(s.costo):'—'}</td>
+      <td><span class="badge badge-activable">⏳ Pendiente</span></td>
+    </tr>`).join('');
+
+  document.getElementById('dash-mtt-content').innerHTML = `
+    <div class="home-kpi-grid" style="margin-bottom:20px">
+      <div class="home-kpi-card hk-pendiente">
+        <div class="home-kpi-icon">📥</div>
+        <div class="home-kpi-value">${pendValorizar}</div>
+        <div class="home-kpi-label">Por valorizar</div>
+      </div>
+      <div class="home-kpi-card hk-valorizada">
+        <div class="home-kpi-icon">💲</div>
+        <div class="home-kpi-value">${valorizada}</div>
+        <div class="home-kpi-label">Valorizadas</div>
+      </div>
+      <div class="home-kpi-card hk-autorizada">
+        <div class="home-kpi-icon">✅</div>
+        <div class="home-kpi-value">${autorizada}</div>
+        <div class="home-kpi-label">Autorizadas</div>
+      </div>
+      <div class="home-kpi-card" style="border-top:3px solid var(--orange)">
+        <div class="home-kpi-icon">📅</div>
+        <div class="home-kpi-value" style="font-size:1.05rem">${costoMes>0?clp(costoMes):'—'}</div>
+        <div class="home-kpi-label">Costo este mes</div>
+      </div>
+      <div class="home-kpi-card" style="border-top:3px solid var(--blue)">
+        <div class="home-kpi-icon">📆</div>
+        <div class="home-kpi-value" style="font-size:1.05rem">${costoAnio>0?clp(costoAnio):'—'}</div>
+        <div class="home-kpi-label">Costo este año</div>
+      </div>
+      <div class="home-kpi-card">
+        <div class="home-kpi-icon">⏱️</div>
+        <div class="home-kpi-value">${tiempoProm!=null?tiempoProm+' días':'—'}</div>
+        <div class="home-kpi-label">Prom. valorización</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="dash-section-title">🔧 Activables pendientes de gestión</div>
+      ${activablesPend.length === 0
+        ? '<p class="empty-msg" style="margin-top:12px">✅ No hay activables pendientes.</p>'
+        : `<div style="overflow-x:auto"><table class="kpi-table" style="margin-top:12px">
+            <thead><tr><th>Ticket</th><th>Título</th><th>Área</th><th>Costo</th><th>Seguimiento</th></tr></thead>
+            <tbody>${filasAct}</tbody>
+          </table></div>`}
+    </div>`;
+}
+
+// ── ACTIVABLES – SEGUIMIENTO ────────────────────────────────
+const SEGUIMIENTO_LABELS = {
+  pendiente:   '⏳ Pendiente',
+  en_proceso:  '🔄 En proceso',
+  api_emitida: '📄 API emitida',
+  sim_emitida: '📋 SIM emitida',
+  completado:  '✅ Completado',
+};
+
+function renderActivables() {
+  const sols = DB.sols().filter(s => s.esActivable && s.estado === 'Autorizada')
+    .sort((a,b) => (b.decidedAt||b.createdAt).localeCompare(a.decidedAt||a.createdAt));
+  const canEdit = ['mantenimiento','admin'].includes(CU.role);
+
+  const filas = sols.map(s => {
+    const seg = s.seguimientoActivable || 'pendiente';
+    const segHtml = canEdit
+      ? `<select class="activable-seg-select filter-select" data-id="${s.id}" style="font-size:.8rem;padding:4px 8px">
+          ${Object.entries(SEGUIMIENTO_LABELS).map(([k,v]) =>
+            `<option value="${k}"${seg===k?' selected':''}>${v}</option>`
+          ).join('')}
+        </select>`
+      : `<span class="badge">${SEGUIMIENTO_LABELS[seg]||seg}</span>`;
+    const segClass = seg === 'completado' ? 'fila-completada' : '';
+    return `<tr class="${segClass}">
+      <td class="fila-link" onclick="openModal('${s.id}')">${esc(s.ticket||'—')}</td>
+      <td class="fila-link" onclick="openModal('${s.id}')">${esc(s.titulo)}</td>
+      <td class="fila-link" onclick="openModal('${s.id}')">${esc(s.areaGroup)}</td>
+      <td class="fila-link" onclick="openModal('${s.id}')">${s.costo!=null?clp(s.costo):'—'}</td>
+      <td class="fila-link" onclick="openModal('${s.id}')">${fmtD(s.decidedAt)}</td>
+      <td>${segHtml}</td>
+    </tr>`;
+  }).join('');
+
+  const el = document.getElementById('activables-content');
+  el.innerHTML = sols.length === 0
+    ? '<div class="card"><p class="empty-msg">No hay solicitudes activables autorizadas.</p></div>'
+    : `<div class="card"><div style="overflow-x:auto">
+        <table class="kpi-table activables-table" style="margin-top:4px">
+          <thead><tr><th>Ticket</th><th>Título</th><th>Área</th><th>Costo</th><th>Fecha autorización</th><th>Seguimiento</th></tr></thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div></div>`;
+
+  if (canEdit) {
+    el.querySelectorAll('.activable-seg-select').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        const solId  = sel.dataset.id;
+        const newSeg = sel.value;
+        await DB.updateSol(solId, {
+          seguimientoActivable: newSeg,
+          updatedAt: new Date().toISOString(),
+        });
+        toast(`Seguimiento: ${SEGUIMIENTO_LABELS[newSeg]}`, 'ok');
+        if (newSeg === 'completado') {
+          sel.closest('tr').classList.add('fila-completada');
+        } else {
+          sel.closest('tr').classList.remove('fila-completada');
+        }
+      });
+    });
+  }
+}
+
 // ── GESTIÓN VISUAL ─────────────────────────────────────────
 const AREA_LABELS = {
   A:'A) Producción', B:'B) Administración', C:'C) Calidad',
@@ -1330,7 +1627,140 @@ function renderKPIs() {
         <thead><tr><th>Área</th><th>N° Solicitudes</th><th>%</th></tr></thead>
         <tbody>${topAreas.map(([area,cnt])=>`<tr><td>${esc(area)}</td><td>${cnt}</td><td>${total>0?Math.round(cnt/total*100):0}%</td></tr>`).join('')}</tbody>
       </table>
+    </div>
+
+    <!-- #4 Tendencia mensual -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="kpi-section-title">📈 Tendencia mensual (últimos 12 meses)</div>
+      <div style="position:relative;height:260px;margin-top:12px">
+        <canvas id="chart-tendencia"></canvas>
+      </div>
+    </div>
+
+    <!-- #5 Ranking áreas por costo + #6 Resolución por área -->
+    <div class="dash-grid-2" style="margin-bottom:20px">
+      <div class="card">
+        <div class="kpi-section-title">💰 Ranking áreas por costo acumulado</div>
+        <div style="position:relative;height:280px;margin-top:12px">
+          <canvas id="chart-ranking-areas"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="kpi-section-title">🏁 Resolución por área</div>
+        <table class="kpi-table" style="margin-top:12px">
+          <thead><tr><th>Área</th><th>Prom. días</th><th>% Rechazadas</th></tr></thead>
+          <tbody id="kpi-resolucion-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- #8 Comparativo anual -->
+    <div class="card">
+      <div class="kpi-section-title">📅 Comparativo anual</div>
+      <div style="position:relative;height:260px;margin-top:12px">
+        <canvas id="chart-comparativo"></canvas>
+      </div>
     </div>`;
+
+  // Destruir charts anteriores
+  if (chartTendencia)    { chartTendencia.destroy();    chartTendencia    = null; }
+  if (chartRankingAreas) { chartRankingAreas.destroy(); chartRankingAreas = null; }
+  if (chartComparativo)  { chartComparativo.destroy();  chartComparativo  = null; }
+
+  // #4 Tendencia mensual — últimos 12 meses
+  const meses12 = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i);
+    meses12.push(d.toISOString().slice(0,7));
+  }
+  const tendData = meses12.map(m => sols.filter(s => s.createdAt.startsWith(m)).length);
+  const tendLabels = meses12.map(m => {
+    const [y,mo] = m.split('-');
+    return ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(mo)-1] + ' ' + y.slice(2);
+  });
+  chartTendencia = new Chart(document.getElementById('chart-tendencia'), {
+    type: 'line',
+    data: {
+      labels: tendLabels,
+      datasets: [{
+        label: 'Solicitudes ingresadas',
+        data: tendData,
+        borderColor: '#1B3580', backgroundColor: 'rgba(27,53,128,.1)',
+        tension: 0.35, fill: true, pointRadius: 4, pointBackgroundColor: '#1B3580'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+  });
+
+  // #5 Ranking áreas por costo — barra horizontal
+  const costoPorArea = {};
+  sols.forEach(s => { if (s.costo!=null) costoPorArea[s.areaGroup] = (costoPorArea[s.areaGroup]||0) + Number(s.costo); });
+  const rankAreas  = Object.entries(costoPorArea).sort((a,b)=>b[1]-a[1]);
+  chartRankingAreas = new Chart(document.getElementById('chart-ranking-areas'), {
+    type: 'bar',
+    data: {
+      labels: rankAreas.map(([a]) => a),
+      datasets: [{
+        label: 'Costo CLP',
+        data: rankAreas.map(([,c]) => c),
+        backgroundColor: AREA_COLORS.slice(0, rankAreas.length),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + clp(ctx.parsed.x) } }
+      },
+      scales: { x: { ticks: { callback: v => clp(v) } } }
+    }
+  });
+
+  // #6 Resolución por área — tabla
+  const resolucionPorArea = {};
+  sols.forEach(s => {
+    if (!resolucionPorArea[s.areaGroup]) resolucionPorArea[s.areaGroup] = { tiempos:[], total:0, rechazadas:0 };
+    const r = resolucionPorArea[s.areaGroup];
+    r.total++;
+    if (s.estado === 'Rechazada') r.rechazadas++;
+    if (s.decidedAt && s.createdAt) r.tiempos.push((new Date(s.decidedAt)-new Date(s.createdAt))/(1000*60*60*24));
+  });
+  document.getElementById('kpi-resolucion-body').innerHTML = Object.entries(resolucionPorArea)
+    .sort((a,b)=>b[1].total-a[1].total)
+    .map(([area, r]) => {
+      const prom = r.tiempos.length > 0 ? (r.tiempos.reduce((a,b)=>a+b,0)/r.tiempos.length).toFixed(1) : '—';
+      const pctRec = r.total > 0 ? Math.round(r.rechazadas/r.total*100) : 0;
+      return `<tr><td>${esc(area)}</td><td>${prom!=='—'?prom+' días':'—'}</td><td>${pctRec}%</td></tr>`;
+    }).join('');
+
+  // #8 Comparativo anual — solicitudes por año
+  const porAnio = {};
+  sols.forEach(s => {
+    const anio = s.createdAt.slice(0,4);
+    porAnio[anio] = (porAnio[anio]||0) + 1;
+  });
+  const anios = Object.keys(porAnio).sort();
+  chartComparativo = new Chart(document.getElementById('chart-comparativo'), {
+    type: 'bar',
+    data: {
+      labels: anios,
+      datasets: [
+        { label: 'Ingresadas', data: anios.map(a=>porAnio[a]||0), backgroundColor: '#1B3580', borderRadius: 4 },
+        { label: 'Autorizadas', data: anios.map(a=>sols.filter(s=>s.createdAt.startsWith(a)&&s.estado==='Autorizada').length), backgroundColor: '#16a34a', borderRadius: 4 },
+        { label: 'Rechazadas',  data: anios.map(a=>sols.filter(s=>s.createdAt.startsWith(a)&&s.estado==='Rechazada').length),  backgroundColor: '#dc2626', borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+  });
 }
 
 // ── EXPORTAR EXCEL / PDF ──────────────────────────────────

@@ -924,6 +924,94 @@ body {
   .auth-card { padding:32px 22px; }
 }
 
+/* ══════════════════ HOME & DASHBOARDS ══════════════════ */
+
+/* Grid de KPIs Home */
+.home-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+}
+.home-kpi-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  padding: 20px 16px 16px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  border-top: 3px solid var(--border);
+  transition: transform .15s, box-shadow .15s;
+}
+.home-kpi-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.home-kpi-icon  { font-size: 1.6rem; margin-bottom: 6px; }
+.home-kpi-value { font-size: 2rem; font-weight: 800; color: var(--blue); line-height: 1; }
+.home-kpi-label { font-size: .78rem; color: var(--gray); margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+
+.hk-pendiente  { border-top-color: #d97706; }
+.hk-pendiente  .home-kpi-value { color: #d97706; }
+.hk-valorizada { border-top-color: #2563eb; }
+.hk-valorizada .home-kpi-value { color: #2563eb; }
+.hk-autorizada { border-top-color: #16a34a; }
+.hk-autorizada .home-kpi-value { color: #16a34a; }
+.hk-postergada { border-top-color: #f59e0b; }
+.hk-postergada .home-kpi-value { color: #f59e0b; }
+.hk-rechazada  { border-top-color: #dc2626; }
+.hk-rechazada  .home-kpi-value { color: #dc2626; }
+
+/* Grid 2 columnas para dashboards */
+.dash-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 780px) { .dash-grid-2 { grid-template-columns: 1fr; } }
+
+.dash-section-title {
+  font-size: .88rem; font-weight: 700; color: var(--blue);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 12px;
+}
+
+/* Semáforo prioridad (Dashboard Gerente) */
+.semaforo-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px;
+}
+.semaforo-item {
+  text-align: center; padding: 16px 8px; border-radius: var(--radius);
+}
+.sem-alta   { background: #fee2e2; }
+.sem-media  { background: #fef3c7; }
+.sem-baja   { background: #dcfce7; }
+.sem-value  { font-size: 2.2rem; font-weight: 800; line-height: 1; }
+.sem-alta   .sem-value { color: #dc2626; }
+.sem-media  .sem-value { color: #d97706; }
+.sem-baja   .sem-value { color: #16a34a; }
+.sem-label  { font-size: .8rem; font-weight: 600; margin-top: 4px; }
+.dash-total-pill { font-size: .8rem; color: var(--gray); margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* Decisiones históricas */
+.decision-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
+.decision-item { text-align: center; padding: 14px 8px; border-radius: var(--radius); }
+.dec-autorizada { background: #dcfce7; }
+.dec-postergada { background: #fef3c7; }
+.dec-rechazada  { background: #fee2e2; }
+.dec-value { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+.dec-autorizada .dec-value { color: #16a34a; }
+.dec-postergada .dec-value { color: #d97706; }
+.dec-rechazada  .dec-value { color: #dc2626; }
+.dec-label { font-size: .75rem; font-weight: 600; margin-top: 4px; }
+.dash-tasa-pill { font-size: .82rem; color: var(--gray); margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* Filas clickeables en tablas */
+.fila-link { cursor: pointer; }
+.fila-link:hover { background: var(--blue-lt) !important; color: var(--blue); }
+.dias-critico     { color: #dc2626; font-weight: 700; }
+.dias-advertencia { color: #d97706; font-weight: 600; }
+.dias-ok          { color: #16a34a; font-weight: 600; }
+
+/* Tabla activables */
+.activables-table td, .activables-table th { vertical-align: middle; }
+.fila-completada td { opacity: .55; text-decoration: line-through; }
+.fila-completada td:last-child { text-decoration: none; opacity: 1; }
+
 /* ══════════════════ MODO OSCURO ══════════════════ */
 [data-theme="dark"] {
   --bg:         #0f1117;
