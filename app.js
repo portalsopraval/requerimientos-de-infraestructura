@@ -662,6 +662,11 @@ function openModal(id) {
     document.getElementById('modal-comentario-cambio').value   = '';
   }
 
+  // Botón eliminar: autor si Pendiente, o admin siempre
+  const canDelete = CU.role === 'admin' || (s.userId === CU.id && s.estado === 'Pendiente');
+  const btnDel = document.getElementById('btn-eliminar-sol');
+  btnDel.style.display = canDelete ? '' : 'none';
+
   document.getElementById('modal-overlay').style.display = 'flex';
 }
 
@@ -669,6 +674,20 @@ function closeModal() {
   document.getElementById('modal-overlay').style.display = 'none';
   openSolId = null;
 }
+
+// Eliminar solicitud
+document.getElementById('btn-eliminar-sol').addEventListener('click', async () => {
+  const sol = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+  const confirmMsg = CU.role === 'admin'
+    ? `¿Eliminar el requerimiento "${sol.titulo}" (${sol.ticket||'sin ticket'})?\nEsta acción no se puede deshacer.`
+    : `¿Eliminar tu requerimiento "${sol.titulo}"?\nSolo puedes eliminarlo mientras esté Pendiente. Esta acción no se puede deshacer.`;
+  if (!confirm(confirmMsg)) return;
+  await fdb.collection('solicitudes').doc(openSolId).delete();
+  closeModal();
+  toast('Requerimiento eliminado correctamente.', 'ok');
+  reRenderActive();
+});
 
 // Guardar costo
 document.getElementById('btn-guardar-costo').addEventListener('click', async () => {

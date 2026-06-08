@@ -451,6 +451,12 @@ body {
   cursor:pointer; color:var(--gray); padding:4px 8px; border-radius:4px;
 }
 .modal-close:hover { background:var(--gray-lt); }
+.btn-eliminar-sol {
+  padding:5px 12px; background:transparent; color:#ef4444;
+  border:1.5px solid #ef4444; border-radius:6px;
+  font-size:.8rem; font-weight:600; cursor:pointer; transition:all .18s;
+}
+.btn-eliminar-sol:hover { background:#fee2e2; }
 
 .modal-body { padding:20px 24px; }
 .modal-section {
