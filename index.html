@@ -308,19 +308,16 @@
             </div>
 
             <div class="field">
-              <label>Fotografía de respaldo <span class="req">*</span></label>
+              <label>Fotografías de respaldo <span class="req">*</span> <small style="font-weight:400;color:var(--gray)">(mínimo 1, máximo 3)</small></label>
               <div class="file-upload-area" id="file-drop-area">
-                <input type="file" id="sol-foto" accept="image/*" />
+                <input type="file" id="sol-foto" accept="image/*" multiple />
                 <div class="file-upload-label">
                   <span class="file-icon">📷</span>
-                  <span id="file-name-display">Haga clic o arrastre una imagen aquí</span>
-                  <small>JPG, PNG, WEBP – máx. 2 MB</small>
+                  <span id="file-name-display">Haga clic o arrastre imágenes aquí</span>
+                  <small>JPG, PNG, WEBP – máx. 2 MB por foto · hasta 3 fotos</small>
                 </div>
               </div>
-              <div id="foto-preview-wrap" style="display:none;margin-top:10px">
-                <img id="foto-preview" style="max-height:160px;border-radius:6px;border:1px solid #ddd" />
-                <button type="button" id="foto-remove" class="btn-link-sm" style="display:block;margin-top:4px">✕ Quitar imagen</button>
-              </div>
+              <div id="fotos-preview-grid" class="fotos-preview-grid" style="display:none;margin-top:12px"></div>
             </div>
 
             <p id="sol-error" class="error-msg"></p>
@@ -647,6 +644,7 @@
     <div class="modal-header">
       <h3 id="modal-title">Detalle del Requerimiento</h3>
       <div style="display:flex;gap:8px;align-items:center">
+        <button id="btn-pdf-sol" class="btn-pdf-sol" title="Exportar solicitud como PDF">🖨️ PDF</button>
         <button id="btn-eliminar-sol" class="btn-eliminar-sol" style="display:none" title="Eliminar solicitud">🗑️ Eliminar</button>
         <button id="modal-close" class="modal-close">✕</button>
       </div>

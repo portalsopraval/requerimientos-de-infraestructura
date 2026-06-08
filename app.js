@@ -482,58 +482,88 @@ function initDashboard() {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   document.getElementById('btn-dark-mode').textContent = isDark ? '☀️' : '🌙';
 
-  // Botón de notificaciones: visible para mantenimiento y admin
+  // Botón de notificaciones: visible para TODOS los roles
   const btnNotif = document.getElementById('btn-notif');
-  if (['mantenimiento', 'admin'].includes(CU.role)) {
-    btnNotif.style.display = 'flex';
-    // Arrancar listener de notificaciones (filtramos read en cliente para evitar índice compuesto)
-    fdb.collection('notificaciones')
-      .where('toUserId', '==', CU.id)
-      .onSnapshot(snap => {
-        _cache.notifs = snap.docs.map(d => ({ docId: d.id, ...d.data() })).filter(n => !n.read);
-        updateNotifBadge();
-      });
-  } else {
-    btnNotif.style.display = 'none';
-    document.getElementById('notif-panel').style.display = 'none';
-  }
+  btnNotif.style.display = 'flex';
+  fdb.collection('notificaciones')
+    .where('toUserId', '==', CU.id)
+    .onSnapshot(snap => {
+      _cache.notifs = snap.docs.map(d => ({ docId: d.id, ...d.data() })).filter(n => !n.read);
+      updateNotifBadge();
+    });
 
   buildTabs();
 }
 
 // ── NUEVA SOLICITUD ────────────────────────────────────────
-let fotoBase64 = null;
+let fotosBase64 = []; // array de hasta 3 imágenes comprimidas
+
+// Compresión de imagen vía canvas (max 1200px, JPEG 72%)
+function compressImage(file, maxW = 1200, quality = 0.72) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFotosPreview() {
+  const grid = document.getElementById('fotos-preview-grid');
+  if (!fotosBase64.length) { grid.style.display = 'none'; grid.innerHTML = ''; return; }
+  grid.style.display = 'grid';
+  grid.innerHTML = fotosBase64.map((b64, i) => `
+    <div class="foto-thumb-wrap">
+      <img src="${b64}" class="foto-thumb" alt="Foto ${i+1}" />
+      <button type="button" class="foto-thumb-remove" data-idx="${i}" title="Quitar foto">✕</button>
+      <span class="foto-thumb-num">${i+1}</span>
+    </div>`).join('');
+  grid.querySelectorAll('.foto-thumb-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      fotosBase64.splice(parseInt(btn.dataset.idx), 1);
+      fotoInput.value = '';
+      renderFotosPreview();
+      document.getElementById('file-name-display').textContent = fotosBase64.length
+        ? `${fotosBase64.length} foto${fotosBase64.length > 1 ? 's' : ''} adjunta${fotosBase64.length > 1 ? 's' : ''}`
+        : 'Haga clic o arrastre imágenes aquí';
+    });
+  });
+}
 
 const fotoInput = document.getElementById('sol-foto');
-fotoInput.addEventListener('change', () => {
-  const file = fotoInput.files[0];
-  if (!file) return;
-  if (file.size > 2.5 * 1024 * 1024) {
-    toast('La imagen supera los 2 MB. Elija una más pequeña.','err');
-    fotoInput.value = '';
-    return;
+fotoInput.addEventListener('change', async () => {
+  const files = Array.from(fotoInput.files);
+  if (!files.length) return;
+  const disponibles = 3 - fotosBase64.length;
+  if (disponibles <= 0) { toast('Máximo 3 fotos por solicitud.', 'err'); fotoInput.value = ''; return; }
+  const seleccionadas = files.slice(0, disponibles);
+  if (files.length > disponibles) toast(`Solo se agregarán ${disponibles} foto${disponibles > 1 ? 's' : ''} (máximo 3).`, '');
+  for (const file of seleccionadas) {
+    if (file.size > 10 * 1024 * 1024) { toast(`"${file.name}" supera 10 MB.`, 'err'); continue; }
+    const compressed = await compressImage(file);
+    fotosBase64.push(compressed);
   }
-  const reader = new FileReader();
-  reader.onload = ev => {
-    fotoBase64 = ev.target.result;
-    document.getElementById('foto-preview').src = fotoBase64;
-    document.getElementById('foto-preview-wrap').style.display = '';
-    document.getElementById('file-name-display').textContent = file.name;
-  };
-  reader.readAsDataURL(file);
-});
-
-document.getElementById('foto-remove').addEventListener('click', () => {
-  fotoBase64 = null;
   fotoInput.value = '';
-  document.getElementById('foto-preview-wrap').style.display = 'none';
-  document.getElementById('file-name-display').textContent = 'Haga clic o arrastre una imagen aquí';
+  document.getElementById('file-name-display').textContent =
+    `${fotosBase64.length} foto${fotosBase64.length > 1 ? 's' : ''} adjunta${fotosBase64.length > 1 ? 's' : ''}`;
+  renderFotosPreview();
 });
 
 document.getElementById('btn-reset-sol').addEventListener('click', () => {
-  fotoBase64 = null;
-  document.getElementById('foto-preview-wrap').style.display = 'none';
-  document.getElementById('file-name-display').textContent = 'Haga clic o arrastre una imagen aquí';
+  fotosBase64 = [];
+  fotoInput.value = '';
+  renderFotosPreview();
+  document.getElementById('file-name-display').textContent = 'Haga clic o arrastre imágenes aquí';
   document.getElementById('sol-error').textContent = '';
 });
 
@@ -546,10 +576,10 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
   const prioridad   = document.querySelector('input[name="prioridad"]:checked')?.value;
   const err         = document.getElementById('sol-error');
 
-  if (!areaVal)    { err.textContent = 'Seleccione el área del requerimiento.'; return; }
-  if (!motivo)     { err.textContent = 'Seleccione el motivo del requerimiento.'; return; }
-  if (!prioridad)  { err.textContent = 'Seleccione la prioridad del requerimiento.'; return; }
-  if (!fotoBase64) { err.textContent = 'Debe adjuntar una fotografía de respaldo.'; return; }
+  if (!areaVal)          { err.textContent = 'Seleccione el área del requerimiento.'; return; }
+  if (!motivo)           { err.textContent = 'Seleccione el motivo del requerimiento.'; return; }
+  if (!prioridad)        { err.textContent = 'Seleccione la prioridad del requerimiento.'; return; }
+  if (!fotosBase64.length) { err.textContent = 'Debe adjuntar al menos una fotografía de respaldo.'; return; }
   err.textContent = '';
 
   const [areaCode, areaGroup, areaSub] = areaVal.split('|');
@@ -562,7 +592,8 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
     userEmail: CU.email,
     areaCode, areaGroup, areaSub,
     titulo, descripcion, motivo, prioridad,
-    foto: fotoBase64,
+    foto:  fotosBase64[0],         // compatibilidad hacia atrás
+    fotos: [...fotosBase64],        // array completo
     estado: 'Pendiente',
     esActivable: false,
     costo: null,
@@ -608,9 +639,10 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
   toast('Requerimiento enviado correctamente. Mantenimiento revisará el costo estimado.','ok');
   document.getElementById('form-solicitud').reset();
   document.querySelectorAll('input[name="prioridad"]').forEach(r => r.checked = false);
-  fotoBase64 = null;
-  document.getElementById('foto-preview-wrap').style.display = 'none';
-  document.getElementById('file-name-display').textContent = 'Haga clic o arrastre una imagen aquí';
+  fotosBase64 = [];
+  fotoInput.value = '';
+  renderFotosPreview();
+  document.getElementById('file-name-display').textContent = 'Haga clic o arrastre imágenes aquí';
 });
 
 // ── MIS SOLICITUDES ────────────────────────────────────────
@@ -804,7 +836,7 @@ function openModal(id) {
     </div>
     <div class="detail-desc-box">${esc(s.descripcion)}</div>
     ${s.comentarioGerente ? `<div class="obs-box"><strong>Comentario Gerencia:</strong> ${esc(s.comentarioGerente)}</div>` : ''}
-    ${s.foto ? `<div class="detail-foto"><img src="${s.foto}" alt="Fotografía de respaldo" /></div>` : ''}
+    ${(() => { const fs = s.fotos?.length ? s.fotos : (s.foto ? [s.foto] : []); return fs.length ? `<div class="detail-fotos-grid">${fs.map((f,i)=>`<div class="detail-foto-item"><img src="${f}" alt="Foto ${i+1}" class="foto-modal-thumb" /></div>`).join('')}</div>` : ''; })()}
   `;
 
   const secCosto = document.getElementById('modal-costo-section');
@@ -879,6 +911,60 @@ function closeModal() {
   openSolId = null;
 }
 
+// ── PDF individual por solicitud ───────────────────────────
+document.getElementById('btn-pdf-sol').addEventListener('click', () => {
+  const s = DB.sols().find(x => x.id === openSolId);
+  if (!s) return;
+  const fotos = s.fotos?.length ? s.fotos : (s.foto ? [s.foto] : []);
+  const hist  = (s.historial||[]).slice().sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(`<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8"><title>${esc(s.ticket||'SOL')} – Portal Sopraval</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;padding:32px;color:#1a1a1a;font-size:13px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #F07B1B;padding-bottom:12px;margin-bottom:20px}
+h1{color:#1B3580;font-size:1rem}
+.ticket{background:#1B3580;color:#fff;padding:3px 12px;border-radius:4px;font-size:.85rem;font-weight:700;white-space:nowrap}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;margin-bottom:16px}
+.lbl{font-size:.72rem;color:#777;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px}
+.val{font-weight:600;font-size:.88rem}
+.desc{background:#f5f5f5;padding:12px;border-radius:6px;margin-bottom:16px;line-height:1.6;font-size:.88rem}
+.fotos{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.fotos img{max-height:200px;max-width:260px;border-radius:6px;border:1px solid #ddd;object-fit:cover}
+.sect{font-weight:700;font-size:.8rem;color:#1B3580;margin:16px 0 8px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #ddd;padding-bottom:4px}
+.hist{display:flex;gap:10px;padding:5px 0;font-size:.8rem;border-bottom:1px solid #f0f0f0}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.dot-ok{background:#16a34a}.dot-warn{background:#d97706}.dot-err{background:#dc2626}
+.footer{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:.72rem;color:#aaa;text-align:center}
+@media print{body{padding:16px}}
+</style></head><body>
+<div class="header">
+  <div><h1>Portal de Requerimientos – Sopraval / Agrosuper</h1>
+  <div style="margin-top:4px;font-size:.78rem;color:#777">Generado el ${new Date().toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'})}</div></div>
+  <div class="ticket">${esc(s.ticket||'—')}</div>
+</div>
+<h2 style="font-size:1rem;color:#1B3580;margin-bottom:16px">${esc(s.titulo)}</h2>
+<div class="grid">
+  <div><div class="lbl">Estado</div><div class="val">${s.estado}</div></div>
+  <div><div class="lbl">Prioridad</div><div class="val">${s.prioridad||'—'}</div></div>
+  <div><div class="lbl">Área</div><div class="val">${esc(s.areaGroup)} › ${esc(s.areaSub)}</div></div>
+  <div><div class="lbl">Motivo</div><div class="val">${esc(s.motivo)}</div></div>
+  <div><div class="lbl">Solicitante</div><div class="val">${esc(s.userName)}</div></div>
+  <div><div class="lbl">Fecha solicitud</div><div class="val">${fmt(s.createdAt)}</div></div>
+  <div><div class="lbl">Costo estimado</div><div class="val">${s.costo!=null?clp(s.costo):'Pendiente de valorización'}</div></div>
+  ${s.decidedAt?`<div><div class="lbl">Fecha decisión</div><div class="val">${fmt(s.decidedAt)}</div></div>`:''}
+</div>
+${s.comentarioGerente?`<div class="desc"><strong>Comentario Gerencia:</strong> ${esc(s.comentarioGerente)}</div>`:''}
+<div class="desc">${esc(s.descripcion)}</div>
+${fotos.length?`<div class="sect">Fotografías de respaldo (${fotos.length})</div><div class="fotos">${fotos.map(f=>`<img src="${f}" />`).join('')}</div>`:''}
+${hist.length?`<div class="sect">Historial de cambios</div>${hist.map(h=>`<div class="hist"><div class="dot dot-${h.tipo||'ok'}"></div><div><strong>${esc(h.accion)}</strong>${h.detalle?' · '+esc(h.detalle):''} <span style="color:#aaa">– ${esc(h.usuario||'')} · ${fmt(h.fecha)}</span></div></div>`).join('')}`:''}
+<div class="footer">Portal de Requerimientos de Infraestructura · Sopraval / Agrosuper</div>
+</body></html>`);
+  w.document.close();
+  setTimeout(() => w.print(), 400);
+});
+
 // Agregar comentario
 document.getElementById('btn-add-comentario').addEventListener('click', async () => {
   const texto = document.getElementById('comentario-texto').value.trim();
@@ -934,6 +1020,24 @@ document.getElementById('btn-guardar-costo').addEventListener('click', async () 
       accion: 'Valorizada', detalle: `Costo: ${clp(costo)}${notas ? ' · '+notas : ''}${activable ? ' · Activable' : ''}`, tipo:'ok'
     }),
   });
+  // Notificar al Gerente que hay una solicitud lista para autorizar
+  const sol = DB.sols().find(s => s.id === openSolId);
+  const gerenteUsers = DB.users().filter(u => u.role === 'gerente');
+  if (sol && gerenteUsers.length > 0) {
+    const batchGer = fdb.batch();
+    gerenteUsers.forEach(u => {
+      const nid = uid();
+      batchGer.set(fdb.collection('notificaciones').doc(nid), {
+        id: nid, toUserId: u.id, toEmail: u.email,
+        type: 'valorizada', icon: '💰',
+        message: `Solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>VALORIZADA</strong> con costo ${clp(costo)}. Pendiente de su autorización.`,
+        solicitudId: openSolId, ticket: sol.ticket||'', titulo: sol.titulo,
+        esActivable: !!activable, read: false, createdAt: new Date().toISOString(),
+      });
+    });
+    await batchGer.commit();
+  }
+
   const msgActivable = activable ? ' · Marcado como ACTIVABLE (requerirá API o SIM).' : '';
   toast('Costo ingresado. Requerimiento enviado a autorización del Gerente de Planta.' + msgActivable, 'ok');
   closeModal();
@@ -983,6 +1087,24 @@ async function decidir(decision) {
     });
   });
   await batch.commit();
+
+  // Notificar al solicitante sobre la decisión
+  const solicitante = DB.users().find(u => u.id === sol.userId);
+  if (solicitante && solicitante.id !== CU.id) {
+    const msgSol = {
+      Autorizada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADA</strong> por Gerencia. ✅`,
+      Postergada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>POSTERGADA</strong> por Gerencia. ⏸️`,
+      Rechazada:  `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>RECHAZADA</strong> por Gerencia. ❌`,
+    };
+    const nid = uid();
+    await fdb.collection('notificaciones').doc(nid).set({
+      id: nid, toUserId: solicitante.id, toEmail: solicitante.email,
+      type: decision.toLowerCase(), icon: iconos[decision]||'🔔',
+      message: msgSol[decision]||`Tu solicitud fue ${decision}`,
+      solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
+      esActivable: false, read: false, createdAt: new Date().toISOString(),
+    });
+  }
 
   if (decision === 'Autorizada' && sol.esActivable) {
     setTimeout(() => showAvisoActivable(sol), 400);
@@ -1106,7 +1228,29 @@ function renderHome() {
       ${recientes.length
         ? `<div class="sol-list">${recientes.map(s => solCard(s, showCost)).join('')}</div>`
         : '<p class="empty-msg">Sin solicitudes recientes.</p>'}
-    </div>`;
+    </div>
+    ${(() => {
+      const pendPorArea = {};
+      sols.filter(s => s.estado === 'Pendiente').forEach(s => {
+        pendPorArea[s.areaGroup] = (pendPorArea[s.areaGroup]||0) + 1;
+      });
+      const saturadas = Object.entries(pendPorArea).filter(([,n]) => n >= 3).sort((a,b)=>b[1]-a[1]);
+      if (!saturadas.length) return '';
+      return `<div class="card saturacion-card" style="margin-top:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="font-size:1.2rem">⚠️</span>
+          <h3 style="font-size:.95rem;font-weight:700;color:#d97706">Áreas con alta acumulación de pendientes</h3>
+        </div>
+        <div class="saturacion-grid">
+          ${saturadas.map(([area,n]) => `
+            <div class="saturacion-item ${n >= 6 ? 'sat-alta' : n >= 4 ? 'sat-media' : 'sat-baja'}">
+              <div class="sat-n">${n}</div>
+              <div class="sat-area">${esc(area)}</div>
+              <div class="sat-label">pendiente${n>1?'s':''}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    })()}`;
   attachCards(el);
 }
 
@@ -1527,9 +1671,10 @@ function openNotifPanel() {
         const tabMap = {
           admin:         'revision',
           mantenimiento: 'costos',
-          gerente:       'autorizacion',
+          gerente:       'dashboard-ger',
           supervisor:    'revision',
           jefe_area:     'revision',
+          user:          'mis',
         };
         const targetTab = tabMap[CU.role] || 'revision';
         activateTab(targetTab);
