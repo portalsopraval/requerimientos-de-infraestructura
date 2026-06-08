@@ -523,6 +523,32 @@ body {
 .visual-table .num { font-weight:700; color:var(--orange); }
 .visual-table tfoot td { font-weight:800; color:var(--blue); border-top:2px solid var(--blue); }
 
+/* ══════════════════ ADMIN PANEL ══════════════════ */
+.admin-table { width:100%; border-collapse:collapse; font-size:.85rem; }
+.admin-table thead tr { background:var(--blue); }
+.admin-table th { padding:10px 14px; text-align:left; color:#fff; font-weight:600; }
+.admin-table th:first-child { border-radius:var(--radius-sm) 0 0 0; }
+.admin-table th:last-child  { border-radius:0 var(--radius-sm) 0 0; }
+.admin-table td { padding:11px 14px; border-bottom:1px solid var(--gray-border); color:var(--gray-dk); vertical-align:middle; }
+.admin-table tr:hover td { background:var(--blue-lt); }
+.admin-user-name  { font-weight:600; color:var(--blue); }
+.admin-user-email { font-size:.78rem; color:var(--gray-md); margin-top:2px; }
+.admin-role-select {
+  padding:6px 10px; border:1px solid var(--gray-border);
+  border-radius:var(--radius-sm); font-size:.83rem;
+  background:#fff; color:var(--gray-dk); cursor:pointer;
+  min-width:170px;
+}
+.admin-role-select:focus { outline:none; border-color:var(--blue); }
+.btn-admin-save {
+  padding:6px 18px; background:var(--blue); color:#fff;
+  border:none; border-radius:var(--radius-sm);
+  font-size:.83rem; font-weight:600; cursor:pointer;
+  transition:background .18s;
+}
+.btn-admin-save:hover   { background:var(--blue-dk,#1a3a6b); }
+.btn-admin-save:disabled{ background:var(--gray-md); cursor:not-allowed; }
+
 /* ══════════════════ TOAST ══════════════════ */
 .toast {
   position:fixed; bottom:28px; right:28px;

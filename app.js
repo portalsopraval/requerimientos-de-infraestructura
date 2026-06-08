@@ -8,6 +8,7 @@
      mantenimiento→ agrega costos, ve todas
      supervisor   → ve todas con costos (Jefa Administración)
      gerente      → autoriza / posterga / rechaza
+     admin        → gestión de usuarios y roles (solo gvelizm)
 ═══════════════════════════════════════════════════════════ */
 
 // ── Firebase Init ──────────────────────────────────────────
@@ -69,6 +70,7 @@ async function seedUsers() {
     { email:'amorgado@sopraval.cl',     name:'Andrea Morgado',    role:'jefe_area',     areaCode:'D', areaGroup:'Personas',      areaSub:'Personas General',                     title:'Jefe de Personas' },
     { email:'rtrigo@sopraval.cl',       name:'Ricardo Trigo',     role:'jefe_area',     areaCode:'F', areaGroup:'Despacho',      areaSub:'Despacho',                             title:'Jefe de Despacho' },
     { email:'nmarquez@sopraval.cl',     name:'Nicolás Marquez',   role:'jefe_area',     areaCode:'G', areaGroup:'Rendering',     areaSub:'Planta de Rendering',                  title:'Jefe de Planta Rendering' },
+    { email:'gvelizm@sopraval.cl',      name:'Gino Veliz',        role:'admin',         areaCode:'G0',areaGroup:'Gerencia',      areaSub:'Administración Portal',                title:'Administrador del Sistema' },
   ];
   const existingEmails = new Set(_cache.users.map(u => u.email));
   const batch = fdb.batch();
@@ -77,7 +79,7 @@ async function seedUsers() {
     if (!existingEmails.has(p.email)) {
       const id = uid();
       batch.set(fdb.collection('users').doc(id), {
-        id, password:'Sopraval2026', createdAt: new Date().toISOString(), ...p
+        id, password: p.email === 'gvelizm@sopraval.cl' ? 'Sopraval2026' : 'Sopraval2026', createdAt: new Date().toISOString(), ...p
       });
       count++;
     }
@@ -114,6 +116,7 @@ function reRenderActive() {
   if (_activeTab === 'revision')     renderRevision();
   if (_activeTab === 'autorizacion') renderAutorizacion();
   if (_activeTab === 'visual')       renderVisual();
+  if (_activeTab === 'adminpanel')   renderAdminPanel();
 }
 
 // ── Listeners en tiempo real ───────────────────────────────
@@ -164,6 +167,7 @@ const TABS = {
   mantenimiento:[['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['costos','Gestión de Costos'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
   supervisor:   [['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
   gerente:      [['autorizacion','Autorización Pendiente'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
+  admin:        [['revision','Revisión de Solicitudes'],['visual','Gestión Visual'],['adminpanel','⚙️ Gestión de Usuarios']],
 };
 
 function buildTabs() {
@@ -187,6 +191,7 @@ function activateTab(id) {
   if (id === 'revision')     renderRevision();
   if (id === 'autorizacion') renderAutorizacion();
   if (id === 'visual')       renderVisual();
+  if (id === 'adminpanel')   renderAdminPanel();
 }
 
 // ── Login ──────────────────────────────────────────────────
@@ -691,4 +696,72 @@ function renderVisual() {
         </tr>
       </tbody>
     </table>`;
+}
+
+// ── PANEL ADMINISTRACIÓN (solo admin) ─────────────────────
+const ROLE_LABELS = {
+  user:         'Usuario',
+  jefe_area:    'Jefe de Área',
+  mantenimiento:'Mantenimiento',
+  supervisor:   'Supervisora Admin.',
+  gerente:      'Gerente de Planta',
+  admin:        'Administrador',
+};
+
+function renderAdminPanel() {
+  if (CU.role !== 'admin') return;
+  const q     = (document.getElementById('admin-search')?.value || '').toLowerCase();
+  let users   = DB.users().filter(u => u.id !== CU.id); // no mostrarse a sí mismo
+  if (q) users = users.filter(u =>
+    [u.name, u.email, u.areaGroup, ROLE_LABELS[u.role]||u.role].some(f => String(f||'').toLowerCase().includes(q))
+  );
+  users.sort((a,b) => a.name.localeCompare(b.name, 'es'));
+
+  const roleOptions = Object.entries(ROLE_LABELS)
+    .filter(([k]) => k !== 'admin')
+    .map(([k,v]) => `<option value="${k}">${v}</option>`).join('');
+
+  const rows = users.map(u => `
+    <tr>
+      <td>
+        <div class="admin-user-name">${esc(u.name)}</div>
+        <div class="admin-user-email">${esc(u.email)}</div>
+      </td>
+      <td>${esc(u.areaGroup||'—')}</td>
+      <td>
+        <select class="admin-role-select" data-uid="${u.id}" data-current="${u.role}">
+          ${Object.entries(ROLE_LABELS).map(([k,v]) =>
+            `<option value="${k}"${u.role===k?' selected':''}>${v}</option>`
+          ).join('')}
+        </select>
+      </td>
+      <td>
+        <button class="btn-admin-save" data-uid="${u.id}">Guardar</button>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('admin-tabla').innerHTML = users.length
+    ? `<table class="admin-table">
+        <thead><tr><th>Usuario</th><th>Área</th><th>Rol</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+       </table>`
+    : '<p class="empty-msg">No se encontraron usuarios.</p>';
+
+  // Eventos guardar
+  document.querySelectorAll('.btn-admin-save').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const uid    = btn.dataset.uid;
+      const select = document.querySelector(`.admin-role-select[data-uid="${uid}"]`);
+      const newRole= select.value;
+      const user   = DB.users().find(u => u.id === uid);
+      if (!user) return;
+      if (newRole === user.role) { toast('El rol ya es ese, no hay cambios.',''); return; }
+      btn.disabled = true;
+      btn.textContent = '...';
+      await fdb.collection('users').doc(uid).update({ role: newRole });
+      toast(`Rol de ${user.name} actualizado a: ${ROLE_LABELS[newRole]||newRole}`, 'ok');
+      btn.disabled = false;
+      btn.textContent = 'Guardar';
+    });
+  });
 }
