@@ -470,7 +470,7 @@ function statsBar(sols) {
 
 // ── AUTORIZACIÓN (Gerente de Planta) ──────────────────────
 function renderAutorizacion() {
-  const sols = DB.sols().filter(s => s.estado === 'Valorizada').sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
+  const sols = DB.sols().filter(s => ['Pendiente','Valorizada'].includes(s.estado)).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
   document.getElementById('auth-stats').innerHTML = statsBar(DB.sols());
   const el = document.getElementById('auth-lista');
   el.innerHTML = sols.length
@@ -584,8 +584,9 @@ function openModal(id) {
   }
 
   const secAuth = document.getElementById('modal-auth-section');
-  secAuth.style.display = (CU.role === 'gerente' && s.estado === 'Valorizada') ? '' : 'none';
-  if (secAuth.style.display !== 'none') {
+  const gerenteCanDecide = CU.role === 'gerente' && ['Pendiente','Valorizada'].includes(s.estado);
+  secAuth.style.display = gerenteCanDecide ? '' : 'none';
+  if (gerenteCanDecide) {
     document.getElementById('modal-comentario-gerente').value = '';
     const avisoEl = document.getElementById('aviso-activable');
     avisoEl.style.display = s.esActivable ? 'flex' : 'none';
