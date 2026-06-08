@@ -556,6 +556,15 @@ body {
 }
 .btn-admin-reset-pass:hover { background:var(--blue-lt); }
 
+.btn-admin-delete {
+  padding:6px 14px; background:#fff; color:#DC2626;
+  border:1.5px solid #DC2626; border-radius:var(--radius-sm);
+  font-size:.82rem; font-weight:600; cursor:pointer;
+  transition:all .18s;
+}
+.btn-admin-delete:hover    { background:#FEE2E2; }
+.btn-admin-delete:disabled { opacity:.5; cursor:not-allowed; }
+
 /* Botón navbar "Mi cuenta" */
 .btn-nav-pass {
   padding:6px 14px; background:transparent; color:#fff;

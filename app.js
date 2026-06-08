@@ -851,6 +851,7 @@ function renderAdminPanel() {
       <td style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-admin-save" data-uid="${u.id}">Guardar rol</button>
         <button class="btn-admin-reset-pass" data-uid="${u.id}" data-name="${esc(u.name)}" title="Resetear contraseña">🔑 Reset clave</button>
+        <button class="btn-admin-delete" data-uid="${u.id}" data-name="${esc(u.name)}" title="Eliminar usuario">🗑️ Eliminar</button>
       </td>
     </tr>`).join('');
 
@@ -874,6 +875,19 @@ function renderAdminPanel() {
       await fdb.collection('users').doc(uid).update({ role: newRole });
       toast(`Rol de ${user.name} actualizado a: ${ROLE_LABELS[newRole]||newRole}`, 'ok');
       btn.disabled = false; btn.textContent = 'Guardar rol';
+    });
+  });
+
+  // Eventos eliminar usuario
+  document.querySelectorAll('.btn-admin-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const userId   = btn.dataset.uid;
+      const userName = btn.dataset.name;
+      if (!confirm(`¿Está seguro que desea eliminar al usuario "${userName}"?\nEsta acción no se puede deshacer.`)) return;
+      btn.disabled = true; btn.textContent = '...';
+      await fdb.collection('users').doc(userId).delete();
+      toast(`Usuario ${userName} eliminado correctamente.`, 'ok');
+      renderAdminPanel();
     });
   });
 
