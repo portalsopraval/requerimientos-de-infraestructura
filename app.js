@@ -128,14 +128,7 @@ function startListeners() {
     _cache.sols = snap.docs.map(d => d.data());
     reRenderActive();
   });
-  // Listener de notificaciones para el usuario actual
-  fdb.collection('notificaciones')
-    .where('toUserId', '==', CU ? CU.id : '__none__')
-    .where('read', '==', false)
-    .onSnapshot(snap => {
-      _cache.notifs = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
-      updateNotifBadge();
-    });
+  // Listener de notificaciones se inicia en initDashboard() según el rol
 }
 
 // ── App Init ───────────────────────────────────────────────
@@ -167,6 +160,51 @@ appInit().catch(err => {
   console.error('Error iniciando app:', err);
   showScreen('login'); // mostrar login igual si hay error
 });
+
+// Migración: crear notificaciones para solicitudes decididas antes del sistema de notificaciones
+async function backfillNotificaciones() {
+  const flag = await fdb.collection('config').doc('notif_backfill').get();
+  if (flag.exists) return; // ya ejecutado
+
+  const [solsSnap, notifsSnap] = await Promise.all([
+    fdb.collection('solicitudes').get(),
+    fdb.collection('notificaciones').get(),
+  ]);
+  const sols   = solsSnap.docs.map(d => d.data());
+  const notifSolIds = new Set(notifsSnap.docs.map(d => d.data().solicitudId));
+  const decididas = sols.filter(s => ['Autorizada','Postergada','Rechazada'].includes(s.estado) && !notifSolIds.has(s.id));
+  if (decididas.length === 0) {
+    await fdb.collection('config').doc('notif_backfill').set({ done: true });
+    return;
+  }
+
+  const usersSnap = await fdb.collection('users').get();
+  const mttUsers  = usersSnap.docs.map(d => d.data()).filter(u => u.role === 'mantenimiento');
+  const iconos    = { Autorizada:'✅', Postergada:'⏸️', Rechazada:'❌' };
+
+  const batch = fdb.batch();
+  decididas.forEach(sol => {
+    const msg = sol.estado === 'Autorizada'
+      ? `${sol.ticket||''} <strong>${sol.titulo}</strong> fue <strong>AUTORIZADO</strong> por Gerencia.${sol.esActivable ? ' Requiere gestión de <strong>API o SIM</strong>.' : ''}`
+      : `${sol.ticket||''} <strong>${sol.titulo}</strong> fue <strong>${sol.estado.toUpperCase()}</strong> por Gerencia.`;
+    mttUsers.forEach(u => {
+      const nid = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+      batch.set(fdb.collection('notificaciones').doc(nid), {
+        id: nid, toUserId: u.id, toEmail: u.email,
+        type: sol.estado.toLowerCase(),
+        icon: iconos[sol.estado] || '🔔',
+        message: msg, solicitudId: sol.id,
+        ticket: sol.ticket || '', titulo: sol.titulo,
+        esActivable: !!sol.esActivable, read: false,
+        createdAt: sol.decidedAt || sol.updatedAt || new Date().toISOString(),
+      });
+    });
+  });
+  await batch.commit();
+  await fdb.collection('config').doc('notif_backfill').set({ done: true });
+  console.log(`Backfill: ${decididas.length} notificaciones creadas.`);
+}
+backfillNotificaciones().catch(console.error);
 
 // ── Tabs ───────────────────────────────────────────────────
 const TABS = {
@@ -326,12 +364,11 @@ function initDashboard() {
   const btnNotif = document.getElementById('btn-notif');
   if (CU.role === 'mantenimiento') {
     btnNotif.style.display = 'flex';
-    // Arrancar listener de notificaciones para este usuario
+    // Arrancar listener de notificaciones (filtramos read en cliente para evitar índice compuesto)
     fdb.collection('notificaciones')
       .where('toUserId', '==', CU.id)
-      .where('read', '==', false)
       .onSnapshot(snap => {
-        _cache.notifs = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+        _cache.notifs = snap.docs.map(d => ({ docId: d.id, ...d.data() })).filter(n => !n.read);
         updateNotifBadge();
       });
   } else {
