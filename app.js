@@ -473,9 +473,9 @@ function initDashboard() {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   document.getElementById('btn-dark-mode').textContent = isDark ? '☀️' : '🌙';
 
-  // Botón de notificaciones: visible para mantenimiento
+  // Botón de notificaciones: visible para mantenimiento y admin
   const btnNotif = document.getElementById('btn-notif');
-  if (CU.role === 'mantenimiento') {
+  if (['mantenimiento', 'admin'].includes(CU.role)) {
     btnNotif.style.display = 'flex';
     // Arrancar listener de notificaciones (filtramos read en cliente para evitar índice compuesto)
     fdb.collection('notificaciones')
@@ -568,6 +568,34 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
   };
 
   await DB.addSol(nueva);
+
+  // Notificar a usuarios de mantenimiento y admin sobre la nueva solicitud
+  const destinatarios = DB.users().filter(u =>
+    ['mantenimiento', 'admin'].includes(u.role) && u.id !== CU.id
+  );
+  if (destinatarios.length > 0) {
+    const batch = fdb.batch();
+    const prioBadge = { Alta:'🔴', Media:'🟡', Baja:'🟢' };
+    destinatarios.forEach(u => {
+      const nid = uid();
+      batch.set(fdb.collection('notificaciones').doc(nid), {
+        id: nid,
+        toUserId: u.id,
+        toEmail: u.email,
+        type: 'nueva',
+        icon: '📋',
+        message: `Nueva solicitud ${nueva.ticket} <strong>${esc(nueva.titulo)}</strong> ingresada por <strong>${esc(CU.name)}</strong> · ${nueva.areaGroup} ${prioBadge[nueva.prioridad]||''}`,
+        solicitudId: nueva.id,
+        ticket: nueva.ticket,
+        titulo: nueva.titulo,
+        esActivable: false,
+        read: false,
+        createdAt: nueva.createdAt,
+      });
+    });
+    await batch.commit();
+  }
+
   toast('Requerimiento enviado correctamente. Mantenimiento revisará el costo estimado.','ok');
   document.getElementById('form-solicitud').reset();
   document.querySelectorAll('input[name="prioridad"]').forEach(r => r.checked = false);
