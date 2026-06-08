@@ -24,7 +24,7 @@ firebase.initializeApp(firebaseConfig);
 const fdb = firebase.firestore();
 
 // ── Cache en memoria ───────────────────────────────────────
-const _cache = { users: [], sols: [] };
+const _cache = { users: [], sols: [], notifs: [] };
 
 // ── DB facade ──────────────────────────────────────────────
 const DB = {
@@ -128,6 +128,14 @@ function startListeners() {
     _cache.sols = snap.docs.map(d => d.data());
     reRenderActive();
   });
+  // Listener de notificaciones para el usuario actual
+  fdb.collection('notificaciones')
+    .where('toUserId', '==', CU ? CU.id : '__none__')
+    .where('read', '==', false)
+    .onSnapshot(snap => {
+      _cache.notifs = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+      updateNotifBadge();
+    });
 }
 
 // ── App Init ───────────────────────────────────────────────
@@ -313,6 +321,24 @@ function initDashboard() {
   document.getElementById('nav-avatar').textContent = initials(CU.name);
   document.getElementById('nav-name').textContent   = CU.name;
   document.getElementById('nav-area').textContent   = CU.title || CU.areaGroup || '';
+
+  // Botón de notificaciones: visible para mantenimiento
+  const btnNotif = document.getElementById('btn-notif');
+  if (CU.role === 'mantenimiento') {
+    btnNotif.style.display = 'flex';
+    // Arrancar listener de notificaciones para este usuario
+    fdb.collection('notificaciones')
+      .where('toUserId', '==', CU.id)
+      .where('read', '==', false)
+      .onSnapshot(snap => {
+        _cache.notifs = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+        updateNotifBadge();
+      });
+  } else {
+    btnNotif.style.display = 'none';
+    document.getElementById('notif-panel').style.display = 'none';
+  }
+
   buildTabs();
 }
 
@@ -637,6 +663,33 @@ async function decidir(decision) {
     updatedAt:         new Date().toISOString(),
   });
   toast(`Requerimiento ${decision.toLowerCase()} correctamente.`, decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn');
+
+  // Crear notificaciones para todos los usuarios de mantenimiento
+  const mantenimientoUsers = DB.users().filter(u => u.role === 'mantenimiento');
+  const iconos = { Autorizada:'✅', Postergada:'⏸️', Rechazada:'❌' };
+  const msgs = {
+    Autorizada: `Requerimiento ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADO</strong> por Gerencia.${sol.esActivable ? ' Requiere gestión de <strong>API o SIM</strong>.' : ''}`,
+    Postergada: `Requerimiento ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>POSTERGADO</strong> por Gerencia.`,
+    Rechazada:  `Requerimiento ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>RECHAZADO</strong> por Gerencia.`,
+  };
+  const batch = fdb.batch();
+  mantenimientoUsers.forEach(u => {
+    const nid = uid();
+    batch.set(fdb.collection('notificaciones').doc(nid), {
+      id: nid, toUserId: u.id, toEmail: u.email,
+      type: decision.toLowerCase(),
+      icon: iconos[decision] || '🔔',
+      message: msgs[decision] || `Requerimiento ${decision}`,
+      solicitudId: sol.id,
+      ticket: sol.ticket || '',
+      titulo: sol.titulo,
+      esActivable: !!sol.esActivable,
+      read: false,
+      createdAt: new Date().toISOString(),
+    });
+  });
+  await batch.commit();
+
   if (decision === 'Autorizada' && sol.esActivable) {
     setTimeout(() => showAvisoActivable(sol), 400);
   }
@@ -811,6 +864,66 @@ document.getElementById('form-nuevo-user').addEventListener('submit', async e =>
   toast(`Usuario ${name} creado correctamente.`, 'ok');
   renderAdminPanel();
 });
+
+// ── NOTIFICACIONES ────────────────────────────────────────
+function updateNotifBadge() {
+  const badge = document.getElementById('notif-badge');
+  const btn   = document.getElementById('btn-notif');
+  if (!badge || !btn) return;
+  const count = _cache.notifs.length;
+  badge.textContent = count;
+  badge.style.display = count > 0 ? 'flex' : 'none';
+}
+
+function openNotifPanel() {
+  const panel  = document.getElementById('notif-panel');
+  const list   = document.getElementById('notif-list');
+  if (!panel || !list) return;
+
+  // toggle
+  if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+
+  const notifs = _cache.notifs.slice().sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  list.innerHTML = notifs.length
+    ? notifs.map(n => `
+        <div class="notif-item${n.esActivable ? ' notif-activable' : ''}">
+          <div class="notif-icon">${n.icon||'🔔'}</div>
+          <div class="notif-body">
+            <div class="notif-msg">${n.message}</div>
+            <div class="notif-time">${fmt(n.createdAt)}</div>
+          </div>
+          <button class="notif-mark-read" data-docid="${n.docId}" title="Marcar como leído">✕</button>
+        </div>`).join('')
+    : '<p class="notif-empty">Sin notificaciones nuevas.</p>';
+
+  list.querySelectorAll('.notif-mark-read').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      await fdb.collection('notificaciones').doc(btn.dataset.docid).update({ read: true });
+    });
+  });
+
+  panel.style.display = 'block';
+
+  // Cerrar al hacer clic fuera
+  setTimeout(() => {
+    document.addEventListener('click', function handler(e) {
+      if (!document.getElementById('notif-wrap').contains(e.target)) {
+        panel.style.display = 'none';
+        document.removeEventListener('click', handler);
+      }
+    });
+  }, 0);
+}
+
+async function markAllNotifsRead() {
+  const batch = fdb.batch();
+  _cache.notifs.forEach(n => {
+    batch.update(fdb.collection('notificaciones').doc(n.docId), { read: true });
+  });
+  await batch.commit();
+  document.getElementById('notif-panel').style.display = 'none';
+}
 
 // ── PANEL ADMINISTRACIÓN (solo admin) ─────────────────────
 const ROLE_LABELS = {
