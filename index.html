@@ -36,6 +36,7 @@
             <p id="login-error" class="error-msg"></p>
             <button type="submit" class="btn-primary full">Ingresar al sistema</button>
             <p class="auth-link">¿No tiene cuenta? <a href="#" id="go-register">Regístrese aquí</a></p>
+            <p class="auth-link"><a href="#" id="go-recover">¿Olvidó su contraseña?</a></p>
           </form>
           <div class="auth-footer">Planta Industrial Sopraval · Sistema interno de gestión</div>
         </div>
@@ -48,6 +49,41 @@
           </div>
         </div>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ RECUPERAR CONTRASEÑA ═══════════════ -->
+  <div id="screen-recover" class="screen">
+    <div class="auth-bg">
+      <div class="auth-card" style="max-width:440px">
+        <div class="auth-logo">
+          <img class="ag-logo" src="logo-agrosuper.png" alt="Agrosuper" />
+          <div class="logo-sub">Recuperar contraseña</div>
+        </div>
+        <p style="font-size:.88rem;color:#666;margin-bottom:18px;text-align:center">
+          Ingrese su correo registrado para restablecer su contraseña.
+        </p>
+        <form id="form-recover">
+          <div class="field">
+            <label>Correo electrónico</label>
+            <input type="email" id="rec-email" placeholder="nombre@agrosuper.com" required />
+          </div>
+          <div id="rec-new-pass-wrap" style="display:none">
+            <div class="field">
+              <label>Nueva contraseña <span class="req">*</span></label>
+              <input type="password" id="rec-new-pass" placeholder="Mínimo 6 caracteres" minlength="6" />
+            </div>
+            <div class="field">
+              <label>Confirmar nueva contraseña <span class="req">*</span></label>
+              <input type="password" id="rec-confirm-pass" placeholder="Repita la contraseña" minlength="6" />
+            </div>
+          </div>
+          <p id="rec-error" class="error-msg"></p>
+          <p id="rec-ok" class="ok-msg" style="display:none"></p>
+          <button type="submit" class="btn-primary full" id="rec-btn">Verificar correo</button>
+          <p class="auth-link"><a href="#" id="go-login-from-recover">← Volver al inicio de sesión</a></p>
+        </form>
       </div>
     </div>
   </div>
@@ -149,6 +185,7 @@
             <span id="nav-area" class="user-area"></span>
           </div>
         </div>
+        <button id="btn-cambiar-pass" class="btn-nav-pass" title="Cambiar contraseña">🔑 Mi cuenta</button>
         <button id="btn-logout" class="btn-logout">⏻ Salir</button>
       </div>
     </nav>
@@ -412,11 +449,12 @@
       <div class="tab-pane" id="pane-adminpanel">
         <div class="page-header">
           <h1>⚙️ Gestión de Usuarios</h1>
-          <p>Administra los roles de todos los usuarios del portal</p>
+          <p>Administra los roles y contraseñas de todos los usuarios del portal</p>
         </div>
         <div class="card">
-          <div class="filters-bar" style="margin-bottom:16px">
-            <input id="admin-search" type="text" class="filter-input" placeholder="Buscar por nombre, correo o área…" oninput="renderAdminPanel()" style="max-width:360px" />
+          <div class="filters-bar" style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <input id="admin-search" type="text" class="filter-input" placeholder="Buscar por nombre, correo o área…" oninput="renderAdminPanel()" style="max-width:320px;flex:1" />
+            <button id="btn-nuevo-usuario" class="btn-primary" style="white-space:nowrap">+ Agregar Usuario</button>
           </div>
           <div id="admin-tabla"></div>
         </div>
@@ -426,6 +464,123 @@
   </div><!-- /screen-dashboard -->
 
 </div><!-- /app -->
+
+<!-- ═══════════════ MODAL AGREGAR USUARIO (admin) ═══════════════ -->
+<div id="modal-nuevo-user-overlay" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-header">
+      <h3>Agregar Nuevo Usuario</h3>
+      <button id="modal-nuevo-user-close" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-nuevo-user">
+        <div class="grid-2">
+          <div class="field">
+            <label>Nombre completo <span class="req">*</span></label>
+            <input type="text" id="nu-name" placeholder="Ej: Juan Pérez" required />
+          </div>
+          <div class="field">
+            <label>Correo electrónico <span class="req">*</span></label>
+            <input type="email" id="nu-email" placeholder="nombre@sopraval.cl" required />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Contraseña inicial <span class="req">*</span></label>
+            <input type="password" id="nu-pass" placeholder="Mínimo 6 caracteres" minlength="6" required />
+          </div>
+          <div class="field">
+            <label>Cargo / Título</label>
+            <input type="text" id="nu-title" placeholder="Ej: Jefe de Producción" />
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Rol <span class="req">*</span></label>
+            <select id="nu-role" required>
+              <option value="">— Seleccione rol —</option>
+              <option value="user">Usuario</option>
+              <option value="jefe_area">Jefe de Área</option>
+              <option value="mantenimiento">Mantenimiento</option>
+              <option value="supervisor">Supervisora Admin.</option>
+              <option value="gerente">Gerente de Planta</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Área <span class="req">*</span></label>
+            <select id="nu-area" required>
+              <option value="">— Seleccione área —</option>
+              <optgroup label="A) Producción">
+                <option value="A|Producción|Recepción">Recepción</option>
+                <option value="A|Producción|Matanza">Matanza</option>
+                <option value="A|Producción|Eviscerado">Eviscerado</option>
+                <option value="A|Producción|Trozado – Mezanine">Trozado – Mezanine</option>
+                <option value="A|Producción|Empaque">Empaque</option>
+              </optgroup>
+              <optgroup label="B) Administración">
+                <option value="B|Administración|Control de Producción">Control de Producción</option>
+                <option value="B|Administración|Bodega">Bodega</option>
+                <option value="B|Administración|Administración Gral.">Administración Gral.</option>
+              </optgroup>
+              <optgroup label="C) Calidad">
+                <option value="C|Calidad|Higiene">Higiene</option>
+                <option value="C|Calidad|Calidad">Calidad</option>
+              </optgroup>
+              <optgroup label="D) Personas">
+                <option value="D|Personas|SSO">SSO</option>
+                <option value="D|Personas|Personas General">Personas General</option>
+              </optgroup>
+              <optgroup label="E) Mantenimiento">
+                <option value="E|Mantenimiento|Mtto. Faenadora">Mtto. Faenadora</option>
+                <option value="E|Mantenimiento|Mtto. Servicios">Mtto. Servicios</option>
+                <option value="E|Mantenimiento|Planificación de Mtto. y Proyectos">Planificación de Mtto. y Proyectos</option>
+              </optgroup>
+              <optgroup label="F) Despacho">
+                <option value="F|Despacho|Despacho">Despacho</option>
+              </optgroup>
+              <optgroup label="G) Rendering">
+                <option value="G|Rendering|Planta de Rendering">Planta de Rendering</option>
+              </optgroup>
+              <optgroup label="H) Excelencia Operacional">
+                <option value="H|Excelencia Operacional|Mejora Continua">Mejora Continua</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <p id="nu-error" class="error-msg"></p>
+        <button type="submit" class="btn-primary full" style="margin-top:8px">Crear usuario</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL CAMBIAR CONTRASEÑA ═══════════════ -->
+<div id="modal-pass-overlay" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3>🔑 Cambiar contraseña</h3>
+      <button id="modal-pass-close" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-cambiar-pass">
+        <div class="field">
+          <label>Contraseña actual <span class="req">*</span></label>
+          <input type="password" id="cp-actual" placeholder="Su contraseña actual" required />
+        </div>
+        <div class="field">
+          <label>Nueva contraseña <span class="req">*</span></label>
+          <input type="password" id="cp-nueva" placeholder="Mínimo 6 caracteres" minlength="6" required />
+        </div>
+        <div class="field">
+          <label>Confirmar nueva contraseña <span class="req">*</span></label>
+          <input type="password" id="cp-confirma" placeholder="Repita la nueva contraseña" minlength="6" required />
+        </div>
+        <p id="cp-error" class="error-msg"></p>
+        <button type="submit" class="btn-primary full" style="margin-top:8px">Guardar nueva contraseña</button>
+      </form>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════ MODAL ═══════════════ -->
 <div id="modal-overlay" class="modal-overlay" style="display:none">

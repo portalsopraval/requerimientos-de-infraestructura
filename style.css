@@ -548,6 +548,29 @@ body {
 }
 .btn-admin-save:hover   { background:var(--blue-dk,#1a3a6b); }
 .btn-admin-save:disabled{ background:var(--gray-md); cursor:not-allowed; }
+.btn-admin-reset-pass {
+  padding:6px 14px; background:#fff; color:var(--blue);
+  border:1.5px solid var(--blue); border-radius:var(--radius-sm);
+  font-size:.82rem; font-weight:600; cursor:pointer;
+  transition:all .18s;
+}
+.btn-admin-reset-pass:hover { background:var(--blue-lt); }
+
+/* Botón navbar "Mi cuenta" */
+.btn-nav-pass {
+  padding:6px 14px; background:transparent; color:#fff;
+  border:1.5px solid rgba(255,255,255,.5); border-radius:20px;
+  font-size:.82rem; font-weight:600; cursor:pointer;
+  transition:all .18s; margin-right:6px;
+}
+.btn-nav-pass:hover { background:rgba(255,255,255,.15); border-color:#fff; }
+
+/* Mensajes OK en formularios */
+.ok-msg {
+  color:#15803d; font-size:.84rem; background:#dcfce7;
+  border:1px solid #86efac; border-radius:6px;
+  padding:8px 12px; margin-bottom:8px;
+}
 
 /* ══════════════════ TOAST ══════════════════ */
 .toast {

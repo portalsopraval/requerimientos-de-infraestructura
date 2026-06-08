@@ -195,8 +195,10 @@ function activateTab(id) {
 }
 
 // ── Login ──────────────────────────────────────────────────
-document.getElementById('go-register').addEventListener('click', e => { e.preventDefault(); showScreen('register'); });
-document.getElementById('go-login').addEventListener('click',    e => { e.preventDefault(); showScreen('login'); });
+document.getElementById('go-register').addEventListener('click',          e => { e.preventDefault(); showScreen('register'); });
+document.getElementById('go-login').addEventListener('click',             e => { e.preventDefault(); showScreen('login'); });
+document.getElementById('go-recover').addEventListener('click',           e => { e.preventDefault(); resetRecoverForm(); showScreen('recover'); });
+document.getElementById('go-login-from-recover').addEventListener('click',e => { e.preventDefault(); showScreen('login'); });
 
 document.getElementById('form-login').addEventListener('submit', e => {
   e.preventDefault();
@@ -215,6 +217,76 @@ document.getElementById('btn-logout').addEventListener('click', () => {
   CU = null; _activeTab = null; chartCount = null; chartCost = null;
   document.getElementById('form-login').reset();
   showScreen('login');
+});
+
+// ── Cambiar contraseña (navbar) ───────────────────────────
+document.getElementById('btn-cambiar-pass').addEventListener('click', () => {
+  document.getElementById('form-cambiar-pass').reset();
+  document.getElementById('cp-error').textContent = '';
+  document.getElementById('modal-pass-overlay').style.display = 'flex';
+});
+document.getElementById('modal-pass-close').addEventListener('click', () => {
+  document.getElementById('modal-pass-overlay').style.display = 'none';
+});
+document.getElementById('modal-pass-overlay').addEventListener('click', e => {
+  if (e.target.id === 'modal-pass-overlay')
+    document.getElementById('modal-pass-overlay').style.display = 'none';
+});
+document.getElementById('form-cambiar-pass').addEventListener('submit', async e => {
+  e.preventDefault();
+  const actual   = document.getElementById('cp-actual').value;
+  const nueva    = document.getElementById('cp-nueva').value;
+  const confirma = document.getElementById('cp-confirma').value;
+  const errEl    = document.getElementById('cp-error');
+  if (actual !== CU.password)        { errEl.textContent = 'La contraseña actual es incorrecta.'; return; }
+  if (nueva.length < 6)              { errEl.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.'; return; }
+  if (nueva !== confirma)            { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
+  errEl.textContent = '';
+  await fdb.collection('users').doc(CU.id).update({ password: nueva });
+  CU.password = nueva;
+  document.getElementById('modal-pass-overlay').style.display = 'none';
+  toast('Contraseña actualizada correctamente.', 'ok');
+});
+
+// ── Recuperar contraseña (pantalla login) ─────────────────
+let _recoverStep = 1;
+let _recoverUser = null;
+
+function resetRecoverForm() {
+  _recoverStep = 1; _recoverUser = null;
+  document.getElementById('form-recover').reset();
+  document.getElementById('rec-new-pass-wrap').style.display = 'none';
+  document.getElementById('rec-error').textContent = '';
+  document.getElementById('rec-ok').style.display = 'none';
+  document.getElementById('rec-btn').textContent = 'Verificar correo';
+}
+
+document.getElementById('form-recover').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('rec-error');
+  const okEl  = document.getElementById('rec-ok');
+  errEl.textContent = ''; okEl.style.display = 'none';
+
+  if (_recoverStep === 1) {
+    const email = document.getElementById('rec-email').value.trim().toLowerCase();
+    const user  = DB.users().find(u => u.email.toLowerCase() === email);
+    if (!user) { errEl.textContent = 'No existe ninguna cuenta con ese correo.'; return; }
+    _recoverUser = user;
+    _recoverStep = 2;
+    document.getElementById('rec-new-pass-wrap').style.display = '';
+    document.getElementById('rec-btn').textContent = 'Cambiar contraseña';
+    okEl.textContent = `Cuenta encontrada: ${user.name}. Ingrese su nueva contraseña.`;
+    okEl.style.display = 'block';
+  } else {
+    const nueva    = document.getElementById('rec-new-pass').value;
+    const confirma = document.getElementById('rec-confirm-pass').value;
+    if (nueva.length < 6)   { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
+    if (nueva !== confirma) { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
+    await fdb.collection('users').doc(_recoverUser.id).update({ password: nueva });
+    toast('Contraseña restablecida. Ya puede iniciar sesión.', 'ok');
+    resetRecoverForm();
+    showScreen('login');
+  }
 });
 
 // ── Registro ───────────────────────────────────────────────
@@ -698,6 +770,47 @@ function renderVisual() {
     </table>`;
 }
 
+// ── MODAL AGREGAR USUARIO (admin) ────────────────────────
+document.getElementById('btn-nuevo-usuario').addEventListener('click', () => {
+  document.getElementById('form-nuevo-user').reset();
+  document.getElementById('nu-error').textContent = '';
+  document.getElementById('modal-nuevo-user-overlay').style.display = 'flex';
+});
+document.getElementById('modal-nuevo-user-close').addEventListener('click', () => {
+  document.getElementById('modal-nuevo-user-overlay').style.display = 'none';
+});
+document.getElementById('modal-nuevo-user-overlay').addEventListener('click', e => {
+  if (e.target.id === 'modal-nuevo-user-overlay')
+    document.getElementById('modal-nuevo-user-overlay').style.display = 'none';
+});
+document.getElementById('form-nuevo-user').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name  = document.getElementById('nu-name').value.trim();
+  const email = document.getElementById('nu-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('nu-pass').value;
+  const title = document.getElementById('nu-title').value.trim();
+  const role  = document.getElementById('nu-role').value;
+  const area  = document.getElementById('nu-area').value;
+  const errEl = document.getElementById('nu-error');
+
+  if (!role) { errEl.textContent = 'Seleccione el rol del usuario.'; return; }
+  if (!area) { errEl.textContent = 'Seleccione el área del usuario.'; return; }
+  if (DB.users().find(u => u.email.toLowerCase() === email)) {
+    errEl.textContent = 'Ya existe un usuario con ese correo.'; return;
+  }
+  errEl.textContent = '';
+  const [areaCode, areaGroup, areaSub] = area.split('|');
+  const newUser = {
+    id: uid(), name, email, password: pass, role,
+    areaCode, areaGroup, areaSub, title,
+    createdAt: new Date().toISOString()
+  };
+  await DB.addUser(newUser);
+  document.getElementById('modal-nuevo-user-overlay').style.display = 'none';
+  toast(`Usuario ${name} creado correctamente.`, 'ok');
+  renderAdminPanel();
+});
+
 // ── PANEL ADMINISTRACIÓN (solo admin) ─────────────────────
 const ROLE_LABELS = {
   user:         'Usuario',
@@ -729,14 +842,15 @@ function renderAdminPanel() {
       </td>
       <td>${esc(u.areaGroup||'—')}</td>
       <td>
-        <select class="admin-role-select" data-uid="${u.id}" data-current="${u.role}">
+        <select class="admin-role-select" data-uid="${u.id}">
           ${Object.entries(ROLE_LABELS).map(([k,v]) =>
             `<option value="${k}"${u.role===k?' selected':''}>${v}</option>`
           ).join('')}
         </select>
       </td>
-      <td>
-        <button class="btn-admin-save" data-uid="${u.id}">Guardar</button>
+      <td style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-admin-save" data-uid="${u.id}">Guardar rol</button>
+        <button class="btn-admin-reset-pass" data-uid="${u.id}" data-name="${esc(u.name)}" title="Resetear contraseña">🔑 Reset clave</button>
       </td>
     </tr>`).join('');
 
@@ -747,7 +861,7 @@ function renderAdminPanel() {
        </table>`
     : '<p class="empty-msg">No se encontraron usuarios.</p>';
 
-  // Eventos guardar
+  // Eventos guardar rol
   document.querySelectorAll('.btn-admin-save').forEach(btn => {
     btn.addEventListener('click', async () => {
       const uid    = btn.dataset.uid;
@@ -755,13 +869,24 @@ function renderAdminPanel() {
       const newRole= select.value;
       const user   = DB.users().find(u => u.id === uid);
       if (!user) return;
-      if (newRole === user.role) { toast('El rol ya es ese, no hay cambios.',''); return; }
-      btn.disabled = true;
-      btn.textContent = '...';
+      if (newRole === user.role) { toast('El rol ya es ese, no hay cambios.', ''); return; }
+      btn.disabled = true; btn.textContent = '...';
       await fdb.collection('users').doc(uid).update({ role: newRole });
       toast(`Rol de ${user.name} actualizado a: ${ROLE_LABELS[newRole]||newRole}`, 'ok');
-      btn.disabled = false;
-      btn.textContent = 'Guardar';
+      btn.disabled = false; btn.textContent = 'Guardar rol';
+    });
+  });
+
+  // Eventos resetear contraseña
+  document.querySelectorAll('.btn-admin-reset-pass').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const userId   = btn.dataset.uid;
+      const userName = btn.dataset.name;
+      const nuevaClave = prompt(`Nueva contraseña para ${userName}:\n(Mínimo 6 caracteres)`);
+      if (nuevaClave === null) return; // canceló
+      if (nuevaClave.length < 6) { toast('La contraseña debe tener al menos 6 caracteres.', 'err'); return; }
+      await fdb.collection('users').doc(userId).update({ password: nuevaClave });
+      toast(`Contraseña de ${userName} restablecida correctamente.`, 'ok');
     });
   });
 }
