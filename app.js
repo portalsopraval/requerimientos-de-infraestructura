@@ -21,7 +21,8 @@ const firebaseConfig = {
   appId:             "1:945581573169:web:09dbd4804ca4acddaf0110"
 };
 firebase.initializeApp(firebaseConfig);
-const fdb = firebase.firestore();
+const fdb    = firebase.firestore();
+const fauth  = firebase.auth();
 
 // ── Cache en memoria ───────────────────────────────────────
 const _cache = { users: [], sols: [], notifs: [] };
@@ -164,10 +165,10 @@ function startListeners() {
 }
 
 // ── App Init ───────────────────────────────────────────────
-async function appInit() {
-  document.getElementById('screen-login').classList.remove('active');
+// La sesión persiste automáticamente vía Firebase Auth.
+// Los datos se cargan solo cuando hay usuario autenticado.
 
-  // Carga inicial de datos
+async function loadDataAndStart() {
   const [usersSnap, solsSnap] = await Promise.all([
     fdb.collection('users').get(),
     fdb.collection('solicitudes').get(),
@@ -175,22 +176,36 @@ async function appInit() {
   _cache.users = usersSnap.docs.map(d => d.data());
   _cache.sols  = solsSnap.docs.map(d => d.data());
 
-  // Seed usuarios si es necesario
   await seedUsers();
-  // Recargar users tras seed
   const usersSnap2 = await fdb.collection('users').get();
   _cache.users = usersSnap2.docs.map(d => d.data());
 
-  // Iniciar listeners en tiempo real
   startListeners();
-
-  // Mostrar login
-  showScreen('login');
 }
 
-appInit().catch(err => {
-  console.error('Error iniciando app:', err);
-  showScreen('login'); // mostrar login igual si hay error
+// Punto de entrada: escucha el estado de autenticación Firebase
+fauth.onAuthStateChanged(async (firebaseUser) => {
+  if (firebaseUser) {
+    try {
+      await loadDataAndStart();
+      const perfil = _cache.users.find(u => u.email.toLowerCase() === firebaseUser.email.toLowerCase());
+      if (!perfil) {
+        // Cuenta Auth sin perfil Firestore → cerrar sesión
+        await fauth.signOut();
+        showScreen('login');
+        return;
+      }
+      CU = perfil;
+      initDashboard();
+      showScreen('dashboard');
+      backfillNotificaciones().catch(console.error);
+    } catch (err) {
+      console.error('Error cargando datos:', err);
+      showScreen('login');
+    }
+  } else {
+    showScreen('login');
+  }
 });
 
 // Migración: crear notificaciones para solicitudes decididas antes del sistema de notificaciones
@@ -236,7 +251,6 @@ async function backfillNotificaciones() {
   await fdb.collection('config').doc('notif_backfill').set({ done: true });
   console.log(`Backfill: ${decididas.length} notificaciones creadas.`);
 }
-backfillNotificaciones().catch(console.error);
 
 // ── Tabs ───────────────────────────────────────────────────
 const TABS = {
@@ -279,23 +293,61 @@ document.getElementById('go-login').addEventListener('click',             e => {
 document.getElementById('go-recover').addEventListener('click',           e => { e.preventDefault(); resetRecoverForm(); showScreen('recover'); });
 document.getElementById('go-login-from-recover').addEventListener('click',e => { e.preventDefault(); showScreen('login'); });
 
-document.getElementById('form-login').addEventListener('submit', e => {
+document.getElementById('form-login').addEventListener('submit', async e => {
   e.preventDefault();
-  const email = document.getElementById('login-email').value.trim().toLowerCase();
-  const pass  = document.getElementById('login-pass').value;
-  const err   = document.getElementById('login-error');
-  const user  = DB.users().find(u => u.email.toLowerCase() === email && u.password === pass);
-  if (!user) { err.textContent = 'Correo o contraseña incorrectos.'; return; }
-  err.textContent = '';
-  CU = user;
-  initDashboard();
-  showScreen('dashboard');
+  const email  = document.getElementById('login-email').value.trim().toLowerCase();
+  const pass   = document.getElementById('login-pass').value;
+  const errEl  = document.getElementById('login-error');
+  const btnLogin = e.target.querySelector('button[type="submit"]');
+  errEl.textContent = '';
+  btnLogin.disabled = true;
+  btnLogin.textContent = 'Ingresando...';
+
+  try {
+    await fauth.signInWithEmailAndPassword(email, pass);
+    // onAuthStateChanged se encarga del resto
+  } catch (authErr) {
+    if (authErr.code === 'auth/user-not-found' || authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') {
+      // Intentar migración automática: buscar en Firestore con contraseña en texto
+      try {
+        await loadDataAndStart(); // cargar cache si está vacío
+      } catch(_) {}
+      const firestoreUser = _cache.users.find(u =>
+        u.email.toLowerCase() === email && u.password === pass
+      );
+      if (firestoreUser) {
+        try {
+          // Crear cuenta Firebase Auth para este usuario (migración transparente)
+          await fauth.createUserWithEmailAndPassword(email, pass);
+          // Eliminar la contraseña en texto del perfil Firestore
+          await fdb.collection('users').doc(firestoreUser.id).update({
+            password: firebase.firestore.FieldValue.delete()
+          });
+          // onAuthStateChanged se encarga de continuar
+        } catch (createErr) {
+          errEl.textContent = 'Error al migrar cuenta. Contacte al administrador.';
+          console.error('Error migración:', createErr);
+        }
+      } else {
+        errEl.textContent = 'Correo o contraseña incorrectos.';
+      }
+    } else if (authErr.code === 'auth/too-many-requests') {
+      errEl.textContent = 'Demasiados intentos. Espere unos minutos o recupere su contraseña.';
+    } else {
+      errEl.textContent = 'Error al iniciar sesión. Intente nuevamente.';
+      console.error(authErr);
+    }
+  } finally {
+    btnLogin.disabled = false;
+    btnLogin.textContent = 'Ingresar al sistema';
+  }
 });
 
-document.getElementById('btn-logout').addEventListener('click', () => {
+document.getElementById('btn-logout').addEventListener('click', async () => {
   CU = null; _activeTab = null; chartCount = null; chartCost = null;
   document.getElementById('form-login').reset();
-  showScreen('login');
+  await fauth.signOut();
+  // onAuthStateChanged mostrará el login automáticamente
 });
 
 // ── Cambiar contraseña (navbar) ───────────────────────────
@@ -317,54 +369,61 @@ document.getElementById('form-cambiar-pass').addEventListener('submit', async e 
   const nueva    = document.getElementById('cp-nueva').value;
   const confirma = document.getElementById('cp-confirma').value;
   const errEl    = document.getElementById('cp-error');
-  if (actual !== CU.password)        { errEl.textContent = 'La contraseña actual es incorrecta.'; return; }
-  if (nueva.length < 6)              { errEl.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.'; return; }
-  if (nueva !== confirma)            { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
+  const btn      = e.target.querySelector('button[type="submit"]');
+  if (nueva.length < 6)   { errEl.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.'; return; }
+  if (nueva !== confirma) { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
   errEl.textContent = '';
-  await fdb.collection('users').doc(CU.id).update({ password: nueva });
-  CU.password = nueva;
-  document.getElementById('modal-pass-overlay').style.display = 'none';
-  toast('Contraseña actualizada correctamente.', 'ok');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  try {
+    // Re-autenticar antes de cambiar contraseña (requisito Firebase)
+    const credential = firebase.auth.EmailAuthProvider.credential(CU.email, actual);
+    await fauth.currentUser.reauthenticateWithCredential(credential);
+    await fauth.currentUser.updatePassword(nueva);
+    document.getElementById('modal-pass-overlay').style.display = 'none';
+    toast('Contraseña actualizada correctamente.', 'ok');
+  } catch (err) {
+    if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      errEl.textContent = 'La contraseña actual es incorrecta.';
+    } else {
+      errEl.textContent = 'Error al cambiar contraseña. Intente nuevamente.';
+      console.error(err);
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar nueva contraseña';
+  }
 });
 
 // ── Recuperar contraseña (pantalla login) ─────────────────
-let _recoverStep = 1;
-let _recoverUser = null;
-
 function resetRecoverForm() {
-  _recoverStep = 1; _recoverUser = null;
   document.getElementById('form-recover').reset();
-  document.getElementById('rec-new-pass-wrap').style.display = 'none';
   document.getElementById('rec-error').textContent = '';
   document.getElementById('rec-ok').style.display = 'none';
-  document.getElementById('rec-btn').textContent = 'Verificar correo';
+  document.getElementById('rec-btn').textContent = 'Enviar correo de recuperación';
 }
 
 document.getElementById('form-recover').addEventListener('submit', async e => {
   e.preventDefault();
   const errEl = document.getElementById('rec-error');
   const okEl  = document.getElementById('rec-ok');
+  const btn   = document.getElementById('rec-btn');
   errEl.textContent = ''; okEl.style.display = 'none';
 
-  if (_recoverStep === 1) {
-    const email = document.getElementById('rec-email').value.trim().toLowerCase();
-    const user  = DB.users().find(u => u.email.toLowerCase() === email);
-    if (!user) { errEl.textContent = 'No existe ninguna cuenta con ese correo.'; return; }
-    _recoverUser = user;
-    _recoverStep = 2;
-    document.getElementById('rec-new-pass-wrap').style.display = '';
-    document.getElementById('rec-btn').textContent = 'Cambiar contraseña';
-    okEl.textContent = `Cuenta encontrada: ${user.name}. Ingrese su nueva contraseña.`;
+  const email = document.getElementById('rec-email').value.trim().toLowerCase();
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try {
+    await fauth.sendPasswordResetEmail(email);
+    okEl.textContent = `Se envió un correo de recuperación a ${email}. Revise su bandeja de entrada (y la carpeta de spam).`;
     okEl.style.display = 'block';
-  } else {
-    const nueva    = document.getElementById('rec-new-pass').value;
-    const confirma = document.getElementById('rec-confirm-pass').value;
-    if (nueva.length < 6)   { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
-    if (nueva !== confirma) { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
-    await fdb.collection('users').doc(_recoverUser.id).update({ password: nueva });
-    toast('Contraseña restablecida. Ya puede iniciar sesión.', 'ok');
-    resetRecoverForm();
-    showScreen('login');
+    btn.textContent = 'Correo enviado ✓';
+  } catch (err) {
+    if (err.code === 'auth/user-not-found') {
+      errEl.textContent = 'No existe ninguna cuenta con ese correo.';
+    } else {
+      errEl.textContent = 'Error al enviar el correo. Intente nuevamente.';
+      console.error(err);
+    }
+    btn.disabled = false;
+    btn.textContent = 'Enviar correo de recuperación';
   }
 });
 
@@ -375,16 +434,34 @@ document.getElementById('form-register').addEventListener('submit', async e => {
   const email = document.getElementById('reg-email').value.trim().toLowerCase();
   const pass  = document.getElementById('reg-pass').value;
   const area  = document.getElementById('reg-area').value;
-  const err   = document.getElementById('reg-error');
-  if (!area) { err.textContent = 'Seleccione su área de trabajo.'; return; }
-  if (DB.users().find(u => u.email.toLowerCase() === email)) { err.textContent = 'Ese correo ya está registrado.'; return; }
-  const [areaCode, areaGroup, areaSub] = area.split('|');
-  const newUser = { id:uid(), name, email, password:pass, role:'user', areaCode, areaGroup, areaSub, title:'', createdAt:new Date().toISOString() };
-  await DB.addUser(newUser);
-  toast('Cuenta creada. Ahora puede iniciar sesión.','ok');
-  showScreen('login');
-  document.getElementById('form-register').reset();
-  err.textContent = '';
+  const errEl = document.getElementById('reg-error');
+  const btn   = e.target.querySelector('button[type="submit"]');
+  if (!area) { errEl.textContent = 'Seleccione su área de trabajo.'; return; }
+  errEl.textContent = '';
+  btn.disabled = true; btn.textContent = 'Creando cuenta...';
+  try {
+    await fauth.createUserWithEmailAndPassword(email, pass);
+    const [areaCode, areaGroup, areaSub] = area.split('|');
+    const newUser = {
+      id: uid(), name, email, role: 'user',
+      areaCode, areaGroup, areaSub, title: '',
+      createdAt: new Date().toISOString()
+      // sin campo password — Firebase Auth gestiona las credenciales
+    };
+    await DB.addUser(newUser);
+    // onAuthStateChanged detecta la sesión y entra al dashboard automáticamente
+    document.getElementById('form-register').reset();
+  } catch (err) {
+    if (err.code === 'auth/email-already-in-use') {
+      errEl.textContent = 'Ese correo ya está registrado.';
+    } else if (err.code === 'auth/weak-password') {
+      errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+    } else {
+      errEl.textContent = 'Error al crear la cuenta. Intente nuevamente.';
+      console.error(err);
+    }
+    btn.disabled = false; btn.textContent = 'Crear cuenta';
+  }
 });
 
 // ── Dashboard init ─────────────────────────────────────────
@@ -1030,6 +1107,7 @@ document.getElementById('form-nuevo-user').addEventListener('submit', async e =>
   const role  = document.getElementById('nu-role').value;
   const area  = document.getElementById('nu-area').value;
   const errEl = document.getElementById('nu-error');
+  const btn   = e.target.querySelector('button[type="submit"]');
 
   if (!role) { errEl.textContent = 'Seleccione el rol del usuario.'; return; }
   if (!area) { errEl.textContent = 'Seleccione el área del usuario.'; return; }
@@ -1037,16 +1115,46 @@ document.getElementById('form-nuevo-user').addEventListener('submit', async e =>
     errEl.textContent = 'Ya existe un usuario con ese correo.'; return;
   }
   errEl.textContent = '';
-  const [areaCode, areaGroup, areaSub] = area.split('|');
-  const newUser = {
-    id: uid(), name, email, password: pass, role,
-    areaCode, areaGroup, areaSub, title,
-    createdAt: new Date().toISOString()
-  };
-  await DB.addUser(newUser);
-  document.getElementById('modal-nuevo-user-overlay').style.display = 'none';
-  toast(`Usuario ${name} creado correctamente.`, 'ok');
-  renderAdminPanel();
+  btn.disabled = true; btn.textContent = 'Creando...';
+
+  try {
+    // Crear cuenta Firebase Auth via REST API (no afecta la sesión actual del admin)
+    const apiKey = firebaseConfig.apiKey;
+    const resp = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass, returnSecureToken: false })
+      }
+    );
+    const data = await resp.json();
+    if (data.error) {
+      if (data.error.message === 'EMAIL_EXISTS') {
+        errEl.textContent = 'Ya existe una cuenta Firebase Auth con ese correo.';
+      } else {
+        errEl.textContent = `Error Auth: ${data.error.message}`;
+      }
+      btn.disabled = false; btn.textContent = 'Crear usuario';
+      return;
+    }
+
+    const [areaCode, areaGroup, areaSub] = area.split('|');
+    const newUser = {
+      id: uid(), name, email, role,
+      areaCode, areaGroup, areaSub, title,
+      createdAt: new Date().toISOString()
+      // sin campo password
+    };
+    await DB.addUser(newUser);
+    document.getElementById('modal-nuevo-user-overlay').style.display = 'none';
+    toast(`Usuario ${name} creado correctamente.`, 'ok');
+    renderAdminPanel();
+  } catch (err) {
+    errEl.textContent = 'Error de red al crear el usuario. Intente nuevamente.';
+    console.error(err);
+    btn.disabled = false; btn.textContent = 'Crear usuario';
+  }
 });
 
 // ── NOTIFICACIONES ────────────────────────────────────────
@@ -1240,7 +1348,7 @@ function renderAdminPanel() {
       </td>
       <td style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-admin-save" data-uid="${u.id}">Guardar rol</button>
-        <button class="btn-admin-reset-pass" data-uid="${u.id}" data-name="${esc(u.name)}" title="Resetear contraseña">🔑 Reset clave</button>
+        <button class="btn-admin-reset-pass" data-uid="${u.id}" data-name="${esc(u.name)}" data-email="${esc(u.email)}" title="Enviar correo de recuperación">🔑 Reset clave</button>
         <button class="btn-admin-delete" data-uid="${u.id}" data-name="${esc(u.name)}" title="Eliminar usuario">🗑️ Eliminar</button>
       </td>
     </tr>`).join('');
@@ -1281,16 +1389,22 @@ function renderAdminPanel() {
     });
   });
 
-  // Eventos resetear contraseña
+  // Eventos resetear contraseña (envía email de recuperación vía Firebase Auth)
   document.querySelectorAll('.btn-admin-reset-pass').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const userId   = btn.dataset.uid;
-      const userName = btn.dataset.name;
-      const nuevaClave = prompt(`Nueva contraseña para ${userName}:\n(Mínimo 6 caracteres)`);
-      if (nuevaClave === null) return; // canceló
-      if (nuevaClave.length < 6) { toast('La contraseña debe tener al menos 6 caracteres.', 'err'); return; }
-      await fdb.collection('users').doc(userId).update({ password: nuevaClave });
-      toast(`Contraseña de ${userName} restablecida correctamente.`, 'ok');
+      const userEmail = btn.dataset.email;
+      const userName  = btn.dataset.name;
+      if (!confirm(`Se enviará un correo de recuperación de contraseña a:\n${userName} (${userEmail})\n\n¿Continuar?`)) return;
+      btn.disabled = true;
+      try {
+        await fauth.sendPasswordResetEmail(userEmail);
+        toast(`Correo de recuperación enviado a ${userName}.`, 'ok');
+      } catch (err) {
+        toast(`Error al enviar correo a ${userName}. Verifique que el usuario tenga cuenta activa.`, 'err');
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+      }
     });
   });
 }

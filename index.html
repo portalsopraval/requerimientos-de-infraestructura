@@ -62,26 +62,16 @@
           <div class="logo-sub">Recuperar contraseña</div>
         </div>
         <p style="font-size:.88rem;color:#666;margin-bottom:18px;text-align:center">
-          Ingrese su correo registrado para restablecer su contraseña.
+          Ingrese su correo registrado. Le enviaremos un enlace para restablecer su contraseña.
         </p>
         <form id="form-recover">
           <div class="field">
             <label>Correo electrónico</label>
             <input type="email" id="rec-email" placeholder="nombre@agrosuper.com" required />
           </div>
-          <div id="rec-new-pass-wrap" style="display:none">
-            <div class="field">
-              <label>Nueva contraseña <span class="req">*</span></label>
-              <input type="password" id="rec-new-pass" placeholder="Mínimo 6 caracteres" minlength="6" />
-            </div>
-            <div class="field">
-              <label>Confirmar nueva contraseña <span class="req">*</span></label>
-              <input type="password" id="rec-confirm-pass" placeholder="Repita la contraseña" minlength="6" />
-            </div>
-          </div>
           <p id="rec-error" class="error-msg"></p>
           <p id="rec-ok" class="ok-msg" style="display:none"></p>
-          <button type="submit" class="btn-primary full" id="rec-btn">Verificar correo</button>
+          <button type="submit" class="btn-primary full" id="rec-btn">Enviar correo de recuperación</button>
           <p class="auth-link"><a href="#" id="go-login-from-recover">← Volver al inicio de sesión</a></p>
         </form>
       </div>
@@ -598,7 +588,7 @@
       <form id="form-cambiar-pass">
         <div class="field">
           <label>Contraseña actual <span class="req">*</span></label>
-          <input type="password" id="cp-actual" placeholder="Su contraseña actual" required />
+          <input type="password" id="cp-actual" placeholder="Su contraseña actual (para verificar identidad)" required />
         </div>
         <div class="field">
           <label>Nueva contraseña <span class="req">*</span></label>
@@ -716,6 +706,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="app.js"></script>
 </body>
