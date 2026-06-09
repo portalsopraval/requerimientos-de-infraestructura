@@ -909,8 +909,8 @@ function openModal(id) {
   // Sección código API/SIM + CECO (solicitante cuando está PendienteCodigo o Autorizada sin código aún)
   const secCodigo = document.getElementById('modal-codigo-section');
   const estadoRequiereCodigo = ['PendienteCodigo','Autorizada'].includes(s.estado);
-  // Comparar por id O por nombre como fallback (evita fallos por ID inconsistente)
-  const esCreador = s.userId === CU.id || s.userName === CU.name;
+  // Comparar por id, nombre o email como fallback (evita fallos por ID inconsistente)
+  const esCreador = s.userId === CU.id || s.userName === CU.name || s.userEmail === CU.email;
   const mostrarCodigo = estadoRequiereCodigo && esCreador && !s.codigoSolicitud;
   secCodigo.style.display = mostrarCodigo ? '' : 'none';
   if (mostrarCodigo) {
