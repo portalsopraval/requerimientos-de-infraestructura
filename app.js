@@ -778,7 +778,7 @@ function statsBar(sols) {
 
 // ── AUTORIZACIÓN (Gerente de Planta) ──────────────────────
 function renderAutorizacion() {
-  const sols = DB.sols().filter(s => ['Pendiente','Valorizada'].includes(s.estado)).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
+  const sols = DB.sols().filter(s => s.estado === 'Valorizada').sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
   document.getElementById('auth-stats').innerHTML = statsBar(DB.sols());
   if (_pag.autorizacion > Math.ceil(sols.length/PAGE_SIZE) || sols.length === 0) _pag.autorizacion = 1;
   const page = pagSlice(sols, _pag.autorizacion);
@@ -1052,7 +1052,7 @@ document.getElementById('btn-add-comentario').addEventListener('click', async ()
 // ── DERIVAR SOLICITUD (Fescobara → técnico) ───────────────
 document.getElementById('btn-derivar-sol').addEventListener('click', async () => {
   const tecnicoId = document.getElementById('modal-tecnico-asignado').value;
-  if (!tecnicoId) { toast('Selecciona un técnico para derivar la solicitud.', 'err'); return; }
+  if (!tecnicoId) { toast('Selecciona una Jefatura para derivar la solicitud.', 'err'); return; }
   const activable = document.querySelector('input[name="activable-derivar"]:checked')?.value === 'si';
   const tecnico   = DB.users().find(u => u.id === tecnicoId);
   if (!tecnico) { toast('Técnico no encontrado.', 'err'); return; }
@@ -1599,9 +1599,9 @@ function renderActivables() {
 
 // ── GESTIÓN VISUAL ─────────────────────────────────────────
 const AREA_LABELS = {
-  A:'A) Producción', B:'B) Administración', C:'C) Calidad',
-  D:'D) Personas', E:'E) Mantenimiento', F:'F) Despacho',
-  G:'G) Planta de Rendering', H:'H) Excelencia Operacional'
+  A:'Producción', B:'Administración', C:'Calidad',
+  D:'Personas', E:'Mantenimiento', F:'Despacho',
+  G:'Planta de Rendering', H:'Excelencia Operacional'
 };
 const AREA_COLORS = ['#C8102E','#E8A838','#2563EB','#16A34A','#9333EA','#0891B2','#EA580C','#0D9488'];
 const AREA_KEYS   = Object.keys(AREA_LABELS);
