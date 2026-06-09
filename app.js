@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
    AGROSUPER – Portal de Requerimientos de Infraestructura
-   Almacenamiento: Cloud Firestore (Firebase)
+   Almacenamiento: Cloud Firestore (Firebase)   v2026-06-09b
    ─────────────────────────────────────────────────────────
    ROLES:
      user         → ingresa solicitudes, ve las suyas
