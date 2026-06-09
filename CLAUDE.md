@@ -14,8 +14,8 @@ No build step. No dependencies to install. All libraries load from CDN at runtim
 
 ## Deploy
 
-Push to `main` → Netlify auto-deploys.
-Live URL: **https://portal-necesidades-la-calera.netlify.app**
+Push to `main` → GitHub Pages auto-deploys (Netlify pausado por créditos).
+Live URL: **https://ginoveliz.github.io/portal-sopraval/**
 
 ```powershell
 git add -A && git commit -m "mensaje" && git push origin main
