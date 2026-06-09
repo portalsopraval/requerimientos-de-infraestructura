@@ -915,7 +915,9 @@ function openModal(id) {
   const mostrarCodigo = estadoRequiereCodigo && esRolSolicitante && !s.codigoSolicitud;
   secCodigo.style.display = mostrarCodigo ? '' : 'none';
   if (mostrarCodigo) {
-    document.getElementById('modal-tipo-codigo-api').checked = true;
+    document.getElementById('modal-tipo-codigo-api').checked = false;
+    document.getElementById('modal-tipo-codigo-sim').checked = false;
+    document.getElementById('modal-tipo-codigo-ceco').checked = false;
     document.getElementById('modal-num-codigo').value = s.codigoSolicitud || '';
     document.getElementById('modal-ceco-numero').value = s.ceco?.numero || '';
     document.getElementById('modal-ceco-nombre').value = s.ceco?.nombre || '';
@@ -1201,11 +1203,12 @@ document.getElementById('btn-devolver-fescobara').addEventListener('click', asyn
 
 // ── GUARDAR CÓDIGO API/SIM + CECO (solicitante) ───────────
 document.getElementById('btn-guardar-codigo').addEventListener('click', async () => {
-  const tipoCodigo  = document.querySelector('input[name="tipo-codigo"]:checked')?.value || 'API';
+  const tipoCodigo  = document.querySelector('input[name="tipo-codigo"]:checked')?.value;
   const numCodigo   = document.getElementById('modal-num-codigo').value.trim();
   const cecoNumero  = document.getElementById('modal-ceco-numero').value.trim();
   const cecoNombre  = document.getElementById('modal-ceco-nombre').value.trim();
-  if (!numCodigo)  { toast('Ingresa el número de código API o SIM.', 'err'); return; }
+  if (!tipoCodigo) { toast('Selecciona el tipo de código (API, SIM o CECO).', 'err'); return; }
+  if (!numCodigo)  { toast('Ingresa el número de código.', 'err'); return; }
   if (!cecoNumero) { toast('Ingresa el número de CECO.', 'err'); return; }
   if (!cecoNombre) { toast('Ingresa el nombre del Centro de Costo.', 'err'); return; }
 

@@ -678,25 +678,29 @@
       <button id="btn-derivar-sol" class="btn-primary" style="margin-top:16px">📋 Derivar a Jefatura</button>
     </div>
 
-    <!-- Sección Código API/SIM + CECO (solicitante, estado PendienteCodigo) -->
+    <!-- Sección Código API/SIM/CECO (solicitante, estado PendienteCodigo) -->
     <div id="modal-codigo-section" class="modal-section" style="display:none">
       <h4>⚠️ Acción requerida — Ingresar código y CECO</h4>
       <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:14px">Tu solicitud fue autorizada. Completa los siguientes datos para proceder a la ejecución del trabajo.</p>
       <div class="field">
-        <label style="font-weight:600;margin-bottom:8px;display:block">Tipo de código <span class="req">*</span></label>
-        <div style="display:flex;gap:16px;margin-bottom:4px">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-            <input type="radio" name="tipo-codigo" id="modal-tipo-codigo-api" value="API" checked />
+        <label style="font-weight:600;margin-bottom:10px;display:block">Tipo de código <span class="req">*</span></label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px">
+            <input type="radio" name="tipo-codigo" id="modal-tipo-codigo-api" value="API" />
             <span><strong>API</strong> — Solicitud de Obra</span>
           </label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px">
             <input type="radio" name="tipo-codigo" id="modal-tipo-codigo-sim" value="SIM" />
-            <span><strong>SIM</strong> — Solicitud Interna de Mantenimiento</span>
+            <span><strong>SIM</strong> — Solicitud de Inversión Menor</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px">
+            <input type="radio" name="tipo-codigo" id="modal-tipo-codigo-ceco" value="CECO" />
+            <span><strong>CECO</strong> — Centro de Costo</span>
           </label>
         </div>
       </div>
-      <div class="field" style="margin-top:12px">
-        <label>Número de código API / SIM <span class="req">*</span></label>
+      <div class="field" style="margin-top:14px">
+        <label>Número de código <span class="req">*</span></label>
         <input type="text" id="modal-num-codigo" placeholder="Ej: API-2026-0042" />
       </div>
       <div style="background:var(--gray-lt);border-radius:8px;padding:14px;margin-top:16px">
