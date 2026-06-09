@@ -699,6 +699,7 @@ function renderCostos() {
     sols = sols.filter(s =>
       s.estado === 'Pendiente' ||
       s.estado === 'PendienteEjecucion' ||
+      s.estado === 'PendienteRevision' ||
       (s.estado === 'Autorizada' && s.codigoSolicitud)
     );
   } else {
@@ -769,7 +770,7 @@ function renderRevision() {
 
 function statsBar(sols) {
   const cnt = (est) => sols.filter(s=>s.estado===est).length;
-  const estados = ['Pendiente','Derivada','Valorizada','PendienteCodigo','PendienteEjecucion','EnEjecucion','Postergada','Rechazada'];
+  const estados = ['Pendiente','Derivada','Valorizada','PendienteCodigo','PendienteEjecucion','EnEjecucion','PendienteRevision','Postergada','Rechazada'];
   return `<div class="stats-bar">${estados.map(e=>
     `<div class="stat-pill"><span class="stat-n">${cnt(e)}</span>${e}</div>`
   ).join('')}<div class="stat-pill"><span class="stat-n">${sols.length}</span>Total</div></div>`;
@@ -933,8 +934,24 @@ function openModal(id) {
     secCodigoInfo.style.display = 'none';
   }
 
+  // Sección para ejecutor asignado (EnEjecucion) — devolver a Fescobara
+  const secEjecucion = document.getElementById('modal-ejecucion-section');
+  const esEjecutor = s.estado === 'EnEjecucion' &&
+    (s.ejecutorAsignado?.id === CU.id || s.ejecutorAsignado?.name === CU.name || s.ejecutorAsignado?.email === CU.email);
+  secEjecucion.style.display = esEjecutor ? '' : 'none';
+  if (esEjecutor) {
+    document.getElementById('ejec-notas').value = '';
+    // Pre-llenar CECO y código si ya existen
+    document.getElementById('ejec-codigo-info').innerHTML = s.codigoSolicitud
+      ? `<div class="obs-box" style="margin-bottom:8px">
+          <strong>Código ${s.tipoCodigoSolicitud||''}:</strong> ${esc(s.codigoSolicitud)}
+          &nbsp;|&nbsp; <strong>CECO:</strong> ${esc(s.ceco?.numero||'')} — ${esc(s.ceco?.nombre||'')}
+         </div>` : '';
+  }
+
   const secCosto = document.getElementById('modal-costo-section');
-  const mostrarCosto = CU.role === 'mantenimiento' && !esCoordinador() && s.estado === 'Derivada' && s.asignadoA?.id === CU.id;
+  const esAsignadoCosto = s.asignadoA?.id === CU.id || s.asignadoA?.name === CU.name || s.asignadoA?.email === CU.email;
+  const mostrarCosto = CU.role === 'mantenimiento' && !esCoordinador() && s.estado === 'Derivada' && esAsignadoCosto;
   secCosto.style.display = mostrarCosto ? '' : 'none';
   if (secCosto.style.display !== 'none') {
     document.getElementById('modal-costo').value      = '';
@@ -1146,6 +1163,39 @@ document.getElementById('btn-derivar-sol').addEventListener('click', async () =>
 
   closeModal();
   renderCostos();
+});
+
+// ── EJECUTOR: DEVOLVER A FESCOBARA ────────────────────────
+document.getElementById('btn-devolver-fescobara').addEventListener('click', async () => {
+  const notas = document.getElementById('ejec-notas').value.trim();
+  const sol   = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+
+  await DB.updateSol(openSolId, {
+    estado:    'PendienteRevision',
+    updatedAt: new Date().toISOString(),
+    historial: firebase.firestore.FieldValue.arrayUnion({
+      fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+      accion: 'Devuelta a Fescobara', detalle: notas || 'Sin observaciones', tipo:'ok'
+    }),
+  });
+
+  // Notificar a Fescobara
+  const fescobara = DB.users().find(u => u.email === 'fescobara@sopraval.cl');
+  if (fescobara) {
+    const nid = uid();
+    await fdb.collection('notificaciones').doc(nid).set({
+      id: nid, toUserId: fescobara.id, toEmail: fescobara.email,
+      type: 'pendiente_revision', icon: '📬',
+      message: `Solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue devuelta por ${CU.name} para revisión final.${notas ? ' Notas: '+notas : ''}`,
+      solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
+      esActivable: !!sol.esActivable, read: false, createdAt: new Date().toISOString(),
+    });
+  }
+
+  toast('Solicitud devuelta a Fescobara para revisión final.', 'ok');
+  closeModal();
+  reRenderActive();
 });
 
 // ── GUARDAR CÓDIGO API/SIM + CECO (solicitante) ───────────

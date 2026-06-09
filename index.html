@@ -718,6 +718,17 @@
     <!-- Muestra código+CECO ya ingresados (solo lectura) -->
     <div id="modal-codigo-info" style="display:none"></div>
 
+    <!-- Sección ejecutor asignado (EnEjecucion) — devolver a Fescobara -->
+    <div id="modal-ejecucion-section" class="modal-section" style="display:none">
+      <h4>🔧 Solicitud asignada para ejecución</h4>
+      <div id="ejec-codigo-info"></div>
+      <div class="field" style="margin-top:12px">
+        <label>Observaciones / notas de ejecución</label>
+        <textarea id="ejec-notas" rows="3" placeholder="Describe el avance, dificultades o resultado del trabajo..."></textarea>
+      </div>
+      <button id="btn-devolver-fescobara" class="btn-primary" style="margin-top:14px">📬 Enviar a Fescobara para revisión final</button>
+    </div>
+
     <div id="modal-costo-section" class="modal-section" style="display:none">
       <h4>Ingresar costo estimado</h4>
       <div class="grid-2">
