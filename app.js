@@ -741,6 +741,8 @@ function renderRevision() {
 
   let sols = DB.sols();
   if (CU.role === 'jefe_area') sols = sols.filter(s => s.areaCode === CU.areaCode);
+  // Gerente solo ve solicitudes desde Valorizada en adelante (no Pendiente ni Derivada)
+  if (CU.role === 'gerente') sols = sols.filter(s => ['Valorizada','Autorizada','Postergada','Rechazada'].includes(s.estado));
   if (area)      sols = sols.filter(s => s.areaCode  === area);
   if (estado)    sols = sols.filter(s => s.estado    === estado);
   if (motivo)    sols = sols.filter(s => s.motivo    === motivo);
@@ -1291,7 +1293,10 @@ function renderHome() {
   const rechazada  = sols.filter(s => s.estado === 'Rechazada').length;
 
   let recientes;
-  if (['admin','mantenimiento','supervisor','gerente'].includes(CU.role)) {
+  if (CU.role === 'gerente') {
+    // Gerente solo ve solicitudes Valorizadas (listas para su decisión)
+    recientes = sols.filter(s => s.estado === 'Valorizada').sort((a,b) => b.createdAt.localeCompare(a.createdAt)).slice(0,5);
+  } else if (['admin','mantenimiento','supervisor'].includes(CU.role)) {
     recientes = [...sols].sort((a,b) => b.createdAt.localeCompare(a.createdAt)).slice(0,5);
   } else if (CU.role === 'jefe_area') {
     recientes = sols.filter(s => s.areaCode === CU.areaCode).sort((a,b) => b.createdAt.localeCompare(a.createdAt)).slice(0,5);
@@ -1370,7 +1375,7 @@ function renderDashboardGer() {
   const sols = DB.sols();
   const now  = new Date();
 
-  const pendientes = sols.filter(s => ['Pendiente','Valorizada'].includes(s.estado))
+  const pendientes = sols.filter(s => s.estado === 'Valorizada')
     .sort((a,b) => a.createdAt.localeCompare(b.createdAt));
 
   const decididas  = sols.filter(s => ['Autorizada','Postergada','Rechazada'].includes(s.estado));
