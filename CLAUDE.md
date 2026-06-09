@@ -14,8 +14,9 @@ No build step. No dependencies to install. All libraries load from CDN at runtim
 
 ## Deploy
 
-Push to `main` → GitHub Pages auto-deploys (Netlify pausado por créditos).
-Live URL: **https://ginoveliz.github.io/portal-sopraval/**
+Push to `main` → GitHub Pages auto-deploys.
+Live URL: **https://portalsopraval.github.io/requerimientos-de-infraestructura/**
+Repo: https://github.com/portalsopraval/requerimientos-de-infraestructura
 
 ```powershell
 git add -A && git commit -m "mensaje" && git push origin main
