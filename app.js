@@ -695,8 +695,12 @@ function renderCostos() {
   let sols = DB.sols();
 
   if (esCoordinador()) {
-    // Fescobara ve: Pendiente (cotización) y PendienteEjecucion (asignar ejecutor)
-    sols = sols.filter(s => s.estado === 'Pendiente' || s.estado === 'PendienteEjecucion');
+    // Fescobara ve: Pendiente (cotización) y PendienteEjecucion/Autorizada con código (asignar ejecutor)
+    sols = sols.filter(s =>
+      s.estado === 'Pendiente' ||
+      s.estado === 'PendienteEjecucion' ||
+      (s.estado === 'Autorizada' && s.codigoSolicitud)
+    );
   } else {
     // Técnicos ven solo solicitudes Derivada asignadas a ellos
     sols = sols.filter(s => s.estado === 'Derivada' && s.asignadoA?.id === CU.id);
@@ -880,7 +884,11 @@ function openModal(id) {
 
   // Sección derivar (Fescobara: Pendiente → cotización | PendienteEjecucion → ejecución)
   const secDerivar = document.getElementById('modal-derivar-section');
-  const mostrarDerivar = esCoordinador() && (s.estado === 'Pendiente' || s.estado === 'PendienteEjecucion');
+  const mostrarDerivar = esCoordinador() && (
+    s.estado === 'Pendiente' ||
+    s.estado === 'PendienteEjecucion' ||
+    (s.estado === 'Autorizada' && s.codigoSolicitud)
+  );
   secDerivar.style.display = mostrarDerivar ? '' : 'none';
   if (mostrarDerivar) {
     const tecnicos = DB.users().filter(u => u.role === 'mantenimiento' && u.email !== 'fescobara@sopraval.cl');
@@ -897,9 +905,10 @@ function openModal(id) {
     document.getElementById('modal-activable-derivar-no').checked = true;
   }
 
-  // Sección código API/SIM + CECO (solicitante, cuando está PendienteCodigo)
+  // Sección código API/SIM + CECO (solicitante cuando está PendienteCodigo o Autorizada sin código aún)
   const secCodigo = document.getElementById('modal-codigo-section');
-  const mostrarCodigo = s.estado === 'PendienteCodigo' && s.userId === CU.id;
+  const estadoRequiereCodigo = ['PendienteCodigo','Autorizada'].includes(s.estado);
+  const mostrarCodigo = estadoRequiereCodigo && s.userId === CU.id && !s.codigoSolicitud;
   secCodigo.style.display = mostrarCodigo ? '' : 'none';
   if (mostrarCodigo) {
     document.getElementById('modal-tipo-codigo-api').checked = true;
@@ -1083,7 +1092,7 @@ document.getElementById('btn-derivar-sol').addEventListener('click', async () =>
   const sol = DB.sols().find(s => s.id === openSolId);
   if (!sol) return;
 
-  const esEjecucion = sol.estado === 'PendienteEjecucion';
+  const esEjecucion = sol.estado === 'PendienteEjecucion' || (sol.estado === 'Autorizada' && sol.codigoSolicitud);
 
   if (esEjecucion) {
     // Segunda derivación: asignación para ejecución del trabajo
