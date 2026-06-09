@@ -702,18 +702,13 @@
           </label>
         </div>
       </div>
-      <div class="grid-2" style="margin-top:14px">
-        <div class="field">
-          <label>Número de código <span class="req">*</span></label>
-          <input type="text" id="modal-num-codigo" placeholder="Ej: API-2026-0042" />
-        </div>
-        <div class="field">
-          <label>Número CECO <span class="req">*</span></label>
-          <input type="text" id="modal-ceco-numero" placeholder="Ej: 1042" />
-        </div>
+      <div class="field" style="margin-top:14px">
+        <label>Número de Código / CECO <span class="req">*</span></label>
+        <input type="text" id="modal-num-codigo" placeholder="Ej: API-2026-0042" />
+        <input type="hidden" id="modal-ceco-numero" />
       </div>
-      <div class="field" style="margin-top:4px">
-        <label>Nombre Centro de Costo <span class="req">*</span></label>
+      <div class="field" style="margin-top:8px">
+        <label>Nombre Centro de Costo <span style="color:var(--text-muted);font-weight:400">(opcional)</span></label>
         <input type="text" id="modal-ceco-nombre" placeholder="Ej: Producción Procesados" />
       </div>
       <button id="btn-guardar-codigo" class="btn-primary" style="margin-top:16px">✅ Confirmar y enviar a ejecución</button>

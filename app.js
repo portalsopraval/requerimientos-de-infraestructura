@@ -1205,12 +1205,10 @@ document.getElementById('btn-devolver-fescobara').addEventListener('click', asyn
 document.getElementById('btn-guardar-codigo').addEventListener('click', async () => {
   const tipoCodigo  = document.querySelector('input[name="tipo-codigo"]:checked')?.value;
   const numCodigo   = document.getElementById('modal-num-codigo').value.trim();
-  const cecoNumero  = document.getElementById('modal-ceco-numero').value.trim();
   const cecoNombre  = document.getElementById('modal-ceco-nombre').value.trim();
   if (!tipoCodigo) { toast('Selecciona el tipo de código (API, SIM o CECO).', 'err'); return; }
-  if (!numCodigo)  { toast('Ingresa el número de código.', 'err'); return; }
-  if (!cecoNumero) { toast('Ingresa el número de CECO.', 'err'); return; }
-  if (!cecoNombre) { toast('Ingresa el nombre del Centro de Costo.', 'err'); return; }
+  if (!numCodigo)  { toast('Ingresa el número de código / CECO.', 'err'); return; }
+  const cecoNumero  = numCodigo; // mismo valor — campo unificado
 
   const sol = DB.sols().find(s => s.id === openSolId);
   if (!sol) return;
