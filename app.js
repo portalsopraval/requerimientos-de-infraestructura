@@ -1363,8 +1363,8 @@ function showAvisoActivable(sol) {
         <h3>Requerimiento Activable — Acción Requerida</h3>
       </div>
       <div class="aam-body">
-        <p>El requerimiento <strong>${esc(sol.ticket)}</strong> — <em>${esc(sol.titulo)}</em> fue <span class="badge badge-Autorizada">Autorizado</span></p>
-        <p style="margin-top:10px">Este requerimiento fue marcado como <strong>ACTIVABLE</strong>. Mantenimiento debe gestionar el documento correspondiente:</p>
+        <p>El requerimiento <strong>${esc(sol.ticket)}</strong> — <em>${esc(sol.titulo)}</em> fue <span class="badge badge-PendienteCodigo">Autorizado</span></p>
+        <p style="margin-top:10px">Este requerimiento fue marcado como <strong>ACTIVABLE</strong>. El solicitante deberá ingresar el código correspondiente:</p>
         <div class="aam-opciones">
           <div class="aam-opt aam-api">
             <span class="aam-opt-icon">📄</span>
@@ -1375,7 +1375,12 @@ function showAvisoActivable(sol) {
             <div><strong>SIM</strong><small>Solicitud de Inversión y Mantenimiento</small></div>
           </div>
         </div>
-        <p class="aam-nota">Comuníquese con Mantenimiento para iniciar el proceso según el tipo de activable.</p>
+        ${sol.ceco ? `
+        <div class="obs-box" style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap">
+          <span>🏦 <strong>CECO:</strong> ${esc(sol.ceco.numero)}</span>
+          <span>🏷️ <strong>Centro de Costo:</strong> ${esc(sol.ceco.nombre)}</span>
+        </div>` : ''}
+        <p class="aam-nota">El solicitante recibirá la notificación para ingresar el código API o SIM y confirmar los datos de ejecución.</p>
       </div>
       <div class="aam-footer">
         <button class="btn-primary" id="aam-cerrar">Entendido</button>
