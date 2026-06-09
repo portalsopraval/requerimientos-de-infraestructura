@@ -24,6 +24,21 @@ firebase.initializeApp(firebaseConfig);
 const fdb    = firebase.firestore();
 const fauth  = firebase.auth();
 
+// ── EmailJS Init ───────────────────────────────────────────
+emailjs.init('1r8XDNUiPNKGswq3W');
+
+function sendEmail(toEmail, mensaje, ticket, area, prioridad) {
+  // Quitar HTML tags del mensaje para el email
+  const mensajePlano = mensaje.replace(/<[^>]*>/g, '');
+  emailjs.send('service_xcfs28z', 'template_hnkmwy9', {
+    to_email: toEmail,
+    mensaje:  mensajePlano,
+    ticket:   ticket || '',
+    area:     area   || '',
+    prioridad:prioridad || '',
+  }).catch(err => console.warn('EmailJS error:', err));
+}
+
 // ── Cache en memoria ───────────────────────────────────────
 const _cache = { users: [], sols: [], notifs: [] };
 
@@ -634,6 +649,14 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
       });
     });
     await batch.commit();
+    // Enviar email a cada destinatario
+    destinatarios.forEach(u => {
+      sendEmail(
+        u.email,
+        `Nueva solicitud ${nueva.ticket} "${nueva.titulo}" ingresada por ${CU.name} · ${nueva.areaGroup}`,
+        nueva.ticket, nueva.areaGroup, nueva.prioridad
+      );
+    });
   }
 
   toast('Requerimiento enviado correctamente. Mantenimiento revisará el costo estimado.','ok');
@@ -1036,6 +1059,14 @@ document.getElementById('btn-guardar-costo').addEventListener('click', async () 
       });
     });
     await batchGer.commit();
+    // Enviar email al gerente
+    gerenteUsers.forEach(u => {
+      sendEmail(
+        u.email,
+        `Solicitud ${sol.ticket||''} "${sol.titulo}" fue VALORIZADA y está pendiente de su autorización.`,
+        sol.ticket||'', sol.areaGroup||'', sol.prioridad||''
+      );
+    });
   }
 
   const msgActivable = activable ? ' · Marcado como ACTIVABLE (requerirá API o SIM).' : '';
@@ -1087,6 +1118,10 @@ async function decidir(decision) {
     });
   });
   await batch.commit();
+  // Enviar email a mantenimiento
+  mantenimientoUsers.forEach(u => {
+    sendEmail(u.email, msgs[decision] || `Requerimiento ${decision}`, sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
+  });
 
   // Notificar al solicitante sobre la decisión
   const solicitante = DB.users().find(u => u.id === sol.userId);
@@ -1104,6 +1139,12 @@ async function decidir(decision) {
       solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
       esActivable: false, read: false, createdAt: new Date().toISOString(),
     });
+    // Enviar email al solicitante
+    sendEmail(
+      solicitante.email,
+      msgSol[decision] || `Tu solicitud fue ${decision}`,
+      sol.ticket||'', sol.areaGroup||'', sol.prioridad||''
+    );
   }
 
   if (decision === 'Autorizada' && sol.esActivable) {
