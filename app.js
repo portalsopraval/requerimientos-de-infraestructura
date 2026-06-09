@@ -173,6 +173,7 @@ function reRenderActive() {
 function startListeners() {
   fdb.collection('users').onSnapshot(snap => {
     _cache.users = snap.docs.map(d => d.data());
+    reRenderActive();
   });
   fdb.collection('solicitudes').onSnapshot(snap => {
     _cache.sols = snap.docs.map(d => d.data());
