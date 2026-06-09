@@ -28,15 +28,8 @@ const fauth  = firebase.auth();
 emailjs.init('1r8XDNUiPNKGswq3W');
 
 function sendEmail(toEmail, mensaje, ticket, area, prioridad) {
-  // Quitar HTML tags del mensaje para el email
-  const mensajePlano = mensaje.replace(/<[^>]*>/g, '');
-  emailjs.send('service_xcfs28z', 'template_hnkmwy9', {
-    to_email: toEmail,
-    mensaje:  mensajePlano,
-    ticket:   ticket || '',
-    area:     area   || '',
-    prioridad:prioridad || '',
-  }).catch(err => console.warn('EmailJS error:', err));
+  // Envío de emails desactivado temporalmente
+  return;
 }
 
 // ── Cache en memoria ───────────────────────────────────────
