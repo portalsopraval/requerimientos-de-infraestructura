@@ -346,7 +346,7 @@
       <!-- TAB: GESTIÓN DE COSTOS (Mantenimiento) -->
       <div class="tab-pane" id="pane-costos">
         <div class="page-header">
-          <h1>Gestión de Costos</h1>
+          <h1 id="costos-titulo">Gestión de Costos</h1>
           <p>Ingrese el costo estimado de los requerimientos para enviarlos a autorización</p>
         </div>
         <div class="card">
@@ -354,7 +354,8 @@
             <input type="text" id="costos-search" class="search-box" placeholder="🔍  Buscar requerimiento..." />
             <select id="costos-filter-estado" class="filter-select">
               <option value="">Todos los estados</option>
-              <option value="Pendiente">Pendiente (sin costo)</option>
+              <option value="Pendiente">Pendiente</option>
+              <option value="Derivada">Derivada</option>
               <option value="Valorizada">Valorizada</option>
             </select>
           </div>
@@ -650,6 +651,33 @@
       </div>
     </div>
     <div id="modal-body" class="modal-body"></div>
+    <!-- Sección Derivar (solo Fescobara) -->
+    <div id="modal-derivar-section" class="modal-section" style="display:none">
+      <h4>Derivar solicitud a técnico</h4>
+      <div class="field">
+        <label>Técnico asignado <span class="req">*</span></label>
+        <select id="modal-tecnico-asignado">
+          <option value="">— Seleccionar técnico —</option>
+        </select>
+      </div>
+      <div class="field" style="margin-top:16px">
+        <label style="font-weight:600;margin-bottom:8px;display:block">¿El requerimiento es activable? <span class="req">*</span></label>
+        <div class="activable-options">
+          <label class="activable-opt">
+            <input type="radio" name="activable-derivar" id="modal-activable-derivar-si" value="si" />
+            <span class="activable-icon">🔧</span>
+            <span><strong>Sí, es activable</strong><br><small>Generará una API o SIM al ser autorizado</small></span>
+          </label>
+          <label class="activable-opt">
+            <input type="radio" name="activable-derivar" id="modal-activable-derivar-no" value="no" checked />
+            <span class="activable-icon">📋</span>
+            <span><strong>No es activable</strong><br><small>Solo requiere presupuesto y autorización</small></span>
+          </label>
+        </div>
+      </div>
+      <button id="btn-derivar-sol" class="btn-primary" style="margin-top:16px">📋 Derivar a técnico</button>
+    </div>
+
     <div id="modal-costo-section" class="modal-section" style="display:none">
       <h4>Ingresar costo estimado</h4>
       <div class="grid-2">

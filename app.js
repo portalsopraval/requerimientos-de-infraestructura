@@ -87,6 +87,10 @@ async function seedUsers() {
     { email:'rtrigo@sopraval.cl',       name:'Ricardo Trigo',     role:'jefe_area',     areaCode:'F', areaGroup:'Despacho',      areaSub:'Despacho',                             title:'Jefe de Despacho' },
     { email:'nmarquez@sopraval.cl',     name:'Nicolás Marquez',   role:'jefe_area',     areaCode:'G', areaGroup:'Rendering',     areaSub:'Planta de Rendering',                  title:'Jefe de Planta Rendering' },
     { email:'gvelizm@sopraval.cl',      name:'Gino Veliz',        role:'admin',         areaCode:'G0',areaGroup:'Gerencia',      areaSub:'Administración Portal',                title:'Administrador del Sistema' },
+    { email:'cmadridp@sopraval.cl',     name:'Cristobal Madrid',  role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Técnico de Mantenimiento' },
+    { email:'gzapata@sopraval.cl',      name:'Gonzalo Zapata',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Técnico de Mantenimiento' },
+    { email:'ccrojas@sopraval.cl',      name:'Cristian Rojas',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Técnico de Mantenimiento' },
+    { email:'cllopez@sopraval.cl',      name:'Claudio Lopez',     role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Técnico de Mantenimiento' },
   ];
   const existingEmails = new Set(_cache.users.map(u => u.email));
   const batch = fdb.batch();
@@ -686,6 +690,9 @@ function renderMis() {
 }
 
 // ── GESTIÓN DE COSTOS (Mantenimiento) ─────────────────────
+// Fescobara es coordinador: deriva solicitudes a técnicos
+const esCoordinador = () => CU && CU.email === 'fescobara@sopraval.cl';
+
 document.getElementById('costos-search').addEventListener('input', renderCostos);
 document.getElementById('costos-filter-estado').addEventListener('change', renderCostos);
 
@@ -693,15 +700,29 @@ function renderCostos() {
   const q      = document.getElementById('costos-search').value.toLowerCase();
   const estado = document.getElementById('costos-filter-estado').value;
   let sols = DB.sols();
+
+  if (esCoordinador()) {
+    // Fescobara ve solicitudes Pendiente (para derivar)
+    sols = sols.filter(s => s.estado === 'Pendiente');
+  } else {
+    // Técnicos ven solo solicitudes Derivada asignadas a ellos
+    sols = sols.filter(s => s.estado === 'Derivada' && s.asignadoA?.id === CU.id);
+  }
+
   if (estado) sols = sols.filter(s => s.estado === estado);
   if (q)      sols = sols.filter(s => srch(s, q));
   sols.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   if (_pag.costos > Math.ceil(sols.length/PAGE_SIZE) || sols.length === 0) _pag.costos = 1;
   const page = pagSlice(sols, _pag.costos);
   const el = document.getElementById('costos-lista');
+
+  // Título dinámico según rol
+  const titulo = document.getElementById('costos-titulo');
+  if (titulo) titulo.textContent = esCoordinador() ? 'Solicitudes Pendientes — Derivar a Técnico' : 'Mis Solicitudes Asignadas — Ingresar Costo';
+
   el.innerHTML = sols.length
-    ? `<div class="sol-list">${page.map(s => solCard(s, true)).join('')}</div>${pagHTML(sols.length,_pag.costos,'costos')}`
-    : '<p class="empty-msg">No hay solicitudes que coincidan.</p>';
+    ? `<div class="sol-list">${page.map(s => solCard(s, !esCoordinador())).join('')}</div>${pagHTML(sols.length,_pag.costos,'costos')}`
+    : `<p class="empty-msg">${esCoordinador() ? 'No hay solicitudes pendientes de derivar.' : 'No tienes solicitudes asignadas.'}</p>`;
   attachCards(el);
 }
 
@@ -749,7 +770,7 @@ function renderRevision() {
 
 function statsBar(sols) {
   const cnt = (est) => sols.filter(s=>s.estado===est).length;
-  const estados = ['Pendiente','Valorizada','Autorizada','Postergada','Rechazada'];
+  const estados = ['Pendiente','Derivada','Valorizada','Autorizada','Postergada','Rechazada'];
   return `<div class="stats-bar">${estados.map(e=>
     `<div class="stat-pill"><span class="stat-n">${cnt(e)}</span>${e}</div>`
   ).join('')}<div class="stat-pill"><span class="stat-n">${sols.length}</span>Total</div></div>`;
@@ -862,8 +883,23 @@ function openModal(id) {
     ${(() => { const fs = s.fotos?.length ? s.fotos : (s.foto ? [s.foto] : []); return fs.length ? `<div class="detail-fotos-grid">${fs.map((f,i)=>`<div class="detail-foto-item"><img src="${f}" alt="Foto ${i+1}" class="foto-modal-thumb" /></div>`).join('')}</div>` : ''; })()}
   `;
 
+  // Sección derivar (solo Fescobara, solicitudes Pendiente)
+  const secDerivar = document.getElementById('modal-derivar-section');
+  const mostrarDerivar = esCoordinador() && s.estado === 'Pendiente';
+  secDerivar.style.display = mostrarDerivar ? '' : 'none';
+  if (mostrarDerivar) {
+    // Poblar dropdown de técnicos
+    const tecnicos = DB.users().filter(u => u.role === 'mantenimiento' && u.email !== 'fescobara@sopraval.cl');
+    const sel = document.getElementById('modal-tecnico-asignado');
+    sel.innerHTML = '<option value="">— Seleccionar técnico —</option>' +
+      tecnicos.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+    document.getElementById('modal-activable-derivar-si').checked = false;
+    document.getElementById('modal-activable-derivar-no').checked = true;
+  }
+
   const secCosto = document.getElementById('modal-costo-section');
-  secCosto.style.display = (CU.role === 'mantenimiento' && s.estado === 'Pendiente') ? '' : 'none';
+  const mostrarCosto = CU.role === 'mantenimiento' && !esCoordinador() && s.estado === 'Derivada' && s.asignadoA?.id === CU.id;
+  secCosto.style.display = mostrarCosto ? '' : 'none';
   if (secCosto.style.display !== 'none') {
     document.getElementById('modal-costo').value      = '';
     document.getElementById('modal-notas-mtt').value  = s.notasMtt || '';
@@ -1011,6 +1047,47 @@ document.getElementById('btn-add-comentario').addEventListener('click', async ()
       </div>`).join('');
   }
   toast('Comentario agregado.','ok');
+});
+
+// ── DERIVAR SOLICITUD (Fescobara → técnico) ───────────────
+document.getElementById('btn-derivar-sol').addEventListener('click', async () => {
+  const tecnicoId = document.getElementById('modal-tecnico-asignado').value;
+  if (!tecnicoId) { toast('Selecciona un técnico para derivar la solicitud.', 'err'); return; }
+  const activable = document.querySelector('input[name="activable-derivar"]:checked')?.value === 'si';
+  const tecnico   = DB.users().find(u => u.id === tecnicoId);
+  if (!tecnico) { toast('Técnico no encontrado.', 'err'); return; }
+  const sol = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+
+  await DB.updateSol(openSolId, {
+    estado:     'Derivada',
+    esActivable: activable,
+    asignadoA:  { id: tecnico.id, name: tecnico.name, email: tecnico.email },
+    updatedAt:  new Date().toISOString(),
+    historial:  firebase.firestore.FieldValue.arrayUnion({
+      fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+      accion: 'Derivada', detalle: `Asignada a ${tecnico.name}${activable ? ' · Activable' : ''}`, tipo:'ok'
+    }),
+  });
+
+  // Notificar al técnico asignado
+  const nid = uid();
+  await fdb.collection('notificaciones').doc(nid).set({
+    id: nid, toUserId: tecnico.id, toEmail: tecnico.email,
+    type: 'derivada', icon: '📋',
+    message: `Se te asignó la solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> para ingresar costo estimado.`,
+    solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
+    esActivable: activable, read: false, createdAt: new Date().toISOString(),
+  });
+  sendEmail(
+    tecnico.email,
+    `Se te asignó la solicitud ${sol.ticket||''} "${sol.titulo}" para ingresar costo estimado.`,
+    sol.ticket||'', sol.areaGroup||'', sol.prioridad||''
+  );
+
+  toast(`Solicitud derivada a ${tecnico.name} correctamente.`, 'ok');
+  closeModal();
+  renderCostos();
 });
 
 // Eliminar solicitud

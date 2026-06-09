@@ -30,6 +30,7 @@
 
   /* ── Estado badges ── */
   --pendiente-bg:  #FEF9C3; --pendiente-tx:  #713F12;
+  --derivada-bg:   #EDE9FE; --derivada-tx:   #4C1D95;
   --valorizada-bg: #DBEAFE; --valorizada-tx: #1E3A8A;
   --autorizada-bg: #DCFCE7; --autorizada-tx: #14532D;
   --postergada-bg: #FEF3C7; --postergada-tx: #78350F;
@@ -408,6 +409,7 @@ body {
   text-transform:uppercase; letter-spacing:.4px;
 }
 .badge-Pendiente  { background:var(--pendiente-bg);  color:var(--pendiente-tx);  }
+.badge-Derivada   { background:var(--derivada-bg);   color:var(--derivada-tx);   }
 .badge-Valorizada { background:var(--valorizada-bg); color:var(--valorizada-tx); }
 .badge-Autorizada { background:var(--autorizada-bg); color:var(--autorizada-tx); }
 .badge-Postergada { background:var(--postergada-bg); color:var(--postergada-tx); }
@@ -1107,6 +1109,7 @@ body {
   --border:     #2e3450;
   --text:       #e2e8f0;
   --pendiente-bg:#2d2a1a; --pendiente-tx:#fbbf24;
+  --derivada-bg:#2e1f4a;  --derivada-tx:#c4b5fd;
   --valorizada-bg:#1a2040; --valorizada-tx:#93c5fd;
   --autorizada-bg:#1a2d1a; --autorizada-tx:#86efac;
   --postergada-bg:#2d2516; --postergada-tx:#fcd34d;
