@@ -755,9 +755,19 @@
       </div>
       <div id="aviso-activable" class="aviso-activable" style="display:none">
         <span class="aviso-icon">⚠️</span>
-        <div>
+        <div style="flex:1">
           <strong>Requerimiento ACTIVABLE</strong>
-          <p>Al autorizar, Mantenimiento deberá gestionar una <strong>API</strong> o <strong>SIM</strong> según corresponda.</p>
+          <p>Al autorizar, el solicitante deberá ingresar el código <strong>API</strong> o <strong>SIM</strong> y el <strong>CECO</strong> (Centro de Costo) que financiará la ejecución del trabajo.</p>
+          <div class="grid-2" style="margin-top:10px">
+            <div class="field">
+              <label style="font-size:.82rem">Número CECO <span class="req">*</span></label>
+              <input type="text" id="ger-ceco-numero" placeholder="Ej: 1042" style="font-size:.85rem" />
+            </div>
+            <div class="field">
+              <label style="font-size:.82rem">Nombre Centro de Costo <span class="req">*</span></label>
+              <input type="text" id="ger-ceco-nombre" placeholder="Ej: Producción Procesados" style="font-size:.85rem" />
+            </div>
+          </div>
         </div>
       </div>
       <div class="auth-btn-row">

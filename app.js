@@ -949,6 +949,10 @@ function openModal(id) {
     document.getElementById('modal-comentario-gerente').value = '';
     const avisoEl = document.getElementById('aviso-activable');
     avisoEl.style.display = s.esActivable ? 'flex' : 'none';
+    if (s.esActivable) {
+      document.getElementById('ger-ceco-numero').value = s.ceco?.numero || '';
+      document.getElementById('ger-ceco-nombre').value = s.ceco?.nombre || '';
+    }
   }
 
   const secChange = document.getElementById('modal-change-section');
@@ -1252,17 +1256,38 @@ async function decidir(decision) {
   const comentario = document.getElementById('modal-comentario-gerente').value.trim();
   const sol = DB.sols().find(s => s.id === openSolId);
   if (!sol) return;
+
+  // Si es activable y el gerente autoriza, leer CECO ingresado en el aviso
+  if (decision === 'Autorizada' && sol.esActivable) {
+    const cecoNum  = document.getElementById('ger-ceco-numero')?.value.trim();
+    const cecoNom  = document.getElementById('ger-ceco-nombre')?.value.trim();
+    if (!cecoNum || !cecoNom) {
+      toast('Ingresa el CECO y el nombre del Centro de Costo antes de autorizar.', 'err');
+      return;
+    }
+  }
+
   const tipoHist = decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn';
-  // Al autorizar → pasa a PendienteCodigo (solicitante debe ingresar API/SIM + CECO)
+  // Al autorizar → pasa a PendienteCodigo (solicitante debe ingresar API/SIM)
   const estadoFinal = decision === 'Autorizada' ? 'PendienteCodigo' : decision;
+
+  // Guardar CECO si fue ingresado por el gerente (activables)
+  const cecoGerente = (decision === 'Autorizada' && sol.esActivable)
+    ? { numero: document.getElementById('ger-ceco-numero').value.trim(),
+        nombre: document.getElementById('ger-ceco-nombre').value.trim() }
+    : null;
+
   await DB.updateSol(openSolId, {
     estado:            estadoFinal,
     comentarioGerente: comentario,
+    ...(cecoGerente ? { ceco: cecoGerente } : {}),
     decidedAt:         new Date().toISOString(),
     updatedAt:         new Date().toISOString(),
     historial: firebase.firestore.FieldValue.arrayUnion({
       fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
-      accion: decision, detalle: comentario || '', tipo: tipoHist
+      accion: decision,
+      detalle: `${comentario || ''}${cecoGerente ? ` · CECO ${cecoGerente.numero} — ${cecoGerente.nombre}` : ''}`,
+      tipo: tipoHist
     }),
   });
   toast(`Requerimiento ${decision.toLowerCase()} correctamente.`, decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn');
