@@ -1899,12 +1899,8 @@ document.getElementById('form-nuevo-user').addEventListener('submit', async e =>
       }
     );
     const data = await resp.json();
-    if (data.error) {
-      if (data.error.message === 'EMAIL_EXISTS') {
-        errEl.textContent = 'Ya existe una cuenta Firebase Auth con ese correo.';
-      } else {
-        errEl.textContent = `Error Auth: ${data.error.message}`;
-      }
+    if (data.error && data.error.message !== 'EMAIL_EXISTS') {
+      errEl.textContent = `Error Auth: ${data.error.message}`;
       btn.disabled = false; btn.textContent = 'Crear usuario';
       return;
     }
@@ -1918,7 +1914,10 @@ document.getElementById('form-nuevo-user').addEventListener('submit', async e =>
     };
     await DB.addUser(newUser);
     document.getElementById('modal-nuevo-user-overlay').style.display = 'none';
-    toast(`Usuario ${name} creado correctamente.`, 'ok');
+    const msg = data.error?.message === 'EMAIL_EXISTS'
+      ? `Perfil de ${name} restaurado (cuenta Auth ya existía).`
+      : `Usuario ${name} creado correctamente.`;
+    toast(msg, 'ok');
     renderAdminPanel();
   } catch (err) {
     errEl.textContent = 'Error de red al crear el usuario. Intente nuevamente.';
