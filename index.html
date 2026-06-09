@@ -651,16 +651,16 @@
       </div>
     </div>
     <div id="modal-body" class="modal-body"></div>
-    <!-- Sección Derivar (solo Fescobara) -->
+    <!-- Sección Derivar (Fescobara: cotización y ejecución) -->
     <div id="modal-derivar-section" class="modal-section" style="display:none">
-      <h4>Derivar solicitud a Jefatura</h4>
+      <h4 id="derivar-section-titulo">Derivar solicitud a Jefatura</h4>
       <div class="field">
-        <label>Jefatura asignado <span class="req">*</span></label>
+        <label id="derivar-jefatura-label">Jefatura asignado <span class="req">*</span></label>
         <select id="modal-tecnico-asignado">
           <option value="">— Seleccionar Jefatura —</option>
         </select>
       </div>
-      <div class="field" style="margin-top:16px">
+      <div class="field" id="activable-derivar-row" style="margin-top:16px">
         <label style="font-weight:600;margin-bottom:8px;display:block">¿El requerimiento es activable? <span class="req">*</span></label>
         <div class="activable-options">
           <label class="activable-opt">
@@ -677,6 +677,46 @@
       </div>
       <button id="btn-derivar-sol" class="btn-primary" style="margin-top:16px">📋 Derivar a Jefatura</button>
     </div>
+
+    <!-- Sección Código API/SIM + CECO (solicitante, estado PendienteCodigo) -->
+    <div id="modal-codigo-section" class="modal-section" style="display:none">
+      <h4>⚠️ Acción requerida — Ingresar código y CECO</h4>
+      <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:14px">Tu solicitud fue autorizada. Completa los siguientes datos para proceder a la ejecución del trabajo.</p>
+      <div class="field">
+        <label style="font-weight:600;margin-bottom:8px;display:block">Tipo de código <span class="req">*</span></label>
+        <div style="display:flex;gap:16px;margin-bottom:4px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="radio" name="tipo-codigo" id="modal-tipo-codigo-api" value="API" checked />
+            <span><strong>API</strong> — Solicitud de Obra</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="radio" name="tipo-codigo" id="modal-tipo-codigo-sim" value="SIM" />
+            <span><strong>SIM</strong> — Solicitud Interna de Mantenimiento</span>
+          </label>
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>Número de código API / SIM <span class="req">*</span></label>
+        <input type="text" id="modal-num-codigo" placeholder="Ej: API-2026-0042" />
+      </div>
+      <div style="background:var(--gray-lt);border-radius:8px;padding:14px;margin-top:16px">
+        <div style="font-weight:700;font-size:.9rem;margin-bottom:10px;color:var(--blue)">🏦 Centro de Costo (CECO)</div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Número CECO <span class="req">*</span></label>
+            <input type="text" id="modal-ceco-numero" placeholder="Ej: 1042" />
+          </div>
+          <div class="field">
+            <label>Nombre Centro de Costo <span class="req">*</span></label>
+            <input type="text" id="modal-ceco-nombre" placeholder="Ej: Producción Procesados" />
+          </div>
+        </div>
+      </div>
+      <button id="btn-guardar-codigo" class="btn-primary" style="margin-top:16px">✅ Confirmar y enviar a ejecución</button>
+    </div>
+
+    <!-- Muestra código+CECO ya ingresados (solo lectura) -->
+    <div id="modal-codigo-info" style="display:none"></div>
 
     <div id="modal-costo-section" class="modal-section" style="display:none">
       <h4>Ingresar costo estimado</h4>

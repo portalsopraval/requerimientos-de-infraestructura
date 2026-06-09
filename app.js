@@ -695,8 +695,8 @@ function renderCostos() {
   let sols = DB.sols();
 
   if (esCoordinador()) {
-    // Fescobara ve solicitudes Pendiente (para derivar)
-    sols = sols.filter(s => s.estado === 'Pendiente');
+    // Fescobara ve: Pendiente (cotización) y PendienteEjecucion (asignar ejecutor)
+    sols = sols.filter(s => s.estado === 'Pendiente' || s.estado === 'PendienteEjecucion');
   } else {
     // Técnicos ven solo solicitudes Derivada asignadas a ellos
     sols = sols.filter(s => s.estado === 'Derivada' && s.asignadoA?.id === CU.id);
@@ -765,7 +765,7 @@ function renderRevision() {
 
 function statsBar(sols) {
   const cnt = (est) => sols.filter(s=>s.estado===est).length;
-  const estados = ['Pendiente','Derivada','Valorizada','Autorizada','Postergada','Rechazada'];
+  const estados = ['Pendiente','Derivada','Valorizada','PendienteCodigo','PendienteEjecucion','EnEjecucion','Postergada','Rechazada'];
   return `<div class="stats-bar">${estados.map(e=>
     `<div class="stat-pill"><span class="stat-n">${cnt(e)}</span>${e}</div>`
   ).join('')}<div class="stat-pill"><span class="stat-n">${sols.length}</span>Total</div></div>`;
@@ -878,18 +878,48 @@ function openModal(id) {
     ${(() => { const fs = s.fotos?.length ? s.fotos : (s.foto ? [s.foto] : []); return fs.length ? `<div class="detail-fotos-grid">${fs.map((f,i)=>`<div class="detail-foto-item"><img src="${f}" alt="Foto ${i+1}" class="foto-modal-thumb" /></div>`).join('')}</div>` : ''; })()}
   `;
 
-  // Sección derivar (solo Fescobara, solicitudes Pendiente)
+  // Sección derivar (Fescobara: Pendiente → cotización | PendienteEjecucion → ejecución)
   const secDerivar = document.getElementById('modal-derivar-section');
-  const mostrarDerivar = esCoordinador() && s.estado === 'Pendiente';
+  const mostrarDerivar = esCoordinador() && (s.estado === 'Pendiente' || s.estado === 'PendienteEjecucion');
   secDerivar.style.display = mostrarDerivar ? '' : 'none';
   if (mostrarDerivar) {
-    // Poblar dropdown de técnicos
     const tecnicos = DB.users().filter(u => u.role === 'mantenimiento' && u.email !== 'fescobara@sopraval.cl');
     const sel = document.getElementById('modal-tecnico-asignado');
-    sel.innerHTML = '<option value="">— Seleccionar técnico —</option>' +
+    const ejecucion = s.estado === 'PendienteEjecucion';
+    document.getElementById('derivar-section-titulo').textContent = ejecucion ? 'Asignar ejecutor de trabajo' : 'Derivar solicitud a Jefatura';
+    document.getElementById('derivar-jefatura-label').textContent = ejecucion ? 'Jefatura ejecutora' : 'Jefatura asignado';
+    document.getElementById('btn-derivar-sol').textContent = ejecucion ? '🔧 Asignar para ejecución' : '📋 Derivar a Jefatura';
+    sel.innerHTML = '<option value="">— Seleccionar Jefatura —</option>' +
       tecnicos.map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+    // El activable solo aplica en la primera derivación
+    document.getElementById('activable-derivar-row').style.display = ejecucion ? 'none' : '';
     document.getElementById('modal-activable-derivar-si').checked = false;
     document.getElementById('modal-activable-derivar-no').checked = true;
+  }
+
+  // Sección código API/SIM + CECO (solicitante, cuando está PendienteCodigo)
+  const secCodigo = document.getElementById('modal-codigo-section');
+  const mostrarCodigo = s.estado === 'PendienteCodigo' && s.userId === CU.id;
+  secCodigo.style.display = mostrarCodigo ? '' : 'none';
+  if (mostrarCodigo) {
+    document.getElementById('modal-tipo-codigo-api').checked = true;
+    document.getElementById('modal-num-codigo').value = s.codigoSolicitud || '';
+    document.getElementById('modal-ceco-numero').value = s.ceco?.numero || '';
+    document.getElementById('modal-ceco-nombre').value = s.ceco?.nombre || '';
+  }
+
+  // Mostrar datos código+CECO si ya fueron ingresados (solo lectura)
+  const secCodigoInfo = document.getElementById('modal-codigo-info');
+  if (s.codigoSolicitud && s.estado !== 'PendienteCodigo') {
+    secCodigoInfo.style.display = '';
+    secCodigoInfo.innerHTML = `
+      <div class="obs-box" style="margin-top:12px">
+        <strong>📄 Código ${s.tipoCodigoSolicitud||''}:</strong> ${esc(s.codigoSolicitud)}
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <strong>🏦 CECO:</strong> ${esc(s.ceco?.numero||'')} — ${esc(s.ceco?.nombre||'')}
+      </div>`;
+  } else {
+    secCodigoInfo.style.display = 'none';
   }
 
   const secCosto = document.getElementById('modal-costo-section');
@@ -904,7 +934,7 @@ function openModal(id) {
   }
 
   const secAuth = document.getElementById('modal-auth-section');
-  const gerenteCanDecide = CU.role === 'gerente' && ['Pendiente','Valorizada'].includes(s.estado);
+  const gerenteCanDecide = CU.role === 'gerente' && s.estado === 'Valorizada';
   secAuth.style.display = gerenteCanDecide ? '' : 'none';
   if (gerenteCanDecide) {
     document.getElementById('modal-comentario-gerente').value = '';
@@ -913,7 +943,7 @@ function openModal(id) {
   }
 
   const secChange = document.getElementById('modal-change-section');
-  secChange.style.display = (CU.role === 'gerente' && ['Autorizada','Postergada','Rechazada'].includes(s.estado)) ? '' : 'none';
+  secChange.style.display = (CU.role === 'gerente' && ['PendienteCodigo','PendienteEjecucion','EnEjecucion','Postergada','Rechazada'].includes(s.estado)) ? '' : 'none';
   if (secChange.style.display !== 'none') {
     document.getElementById('modal-nuevo-estado').value        = s.estado;
     document.getElementById('modal-comentario-cambio').value   = '';
@@ -1048,41 +1078,102 @@ document.getElementById('btn-add-comentario').addEventListener('click', async ()
 document.getElementById('btn-derivar-sol').addEventListener('click', async () => {
   const tecnicoId = document.getElementById('modal-tecnico-asignado').value;
   if (!tecnicoId) { toast('Selecciona una Jefatura para derivar la solicitud.', 'err'); return; }
-  const activable = document.querySelector('input[name="activable-derivar"]:checked')?.value === 'si';
-  const tecnico   = DB.users().find(u => u.id === tecnicoId);
-  if (!tecnico) { toast('Técnico no encontrado.', 'err'); return; }
+  const tecnico = DB.users().find(u => u.id === tecnicoId);
+  if (!tecnico) { toast('Jefatura no encontrada.', 'err'); return; }
+  const sol = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+
+  const esEjecucion = sol.estado === 'PendienteEjecucion';
+
+  if (esEjecucion) {
+    // Segunda derivación: asignación para ejecución del trabajo
+    await DB.updateSol(openSolId, {
+      estado:           'EnEjecucion',
+      ejecutorAsignado: { id: tecnico.id, name: tecnico.name, email: tecnico.email },
+      updatedAt:        new Date().toISOString(),
+      historial: firebase.firestore.FieldValue.arrayUnion({
+        fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+        accion: 'EnEjecucion', detalle: `Asignada para ejecución a ${tecnico.name}`, tipo:'ok'
+      }),
+    });
+    const nid = uid();
+    await fdb.collection('notificaciones').doc(nid).set({
+      id: nid, toUserId: tecnico.id, toEmail: tecnico.email,
+      type: 'en_ejecucion', icon: '🔧',
+      message: `Se te asignó la ejecución de la solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong>.`,
+      solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
+      esActivable: !!sol.esActivable, read: false, createdAt: new Date().toISOString(),
+    });
+    toast(`Solicitud asignada a ${tecnico.name} para ejecución.`, 'ok');
+  } else {
+    // Primera derivación: asignación para cotización de costo
+    const activable = document.querySelector('input[name="activable-derivar"]:checked')?.value === 'si';
+    await DB.updateSol(openSolId, {
+      estado:     'Derivada',
+      esActivable: activable,
+      asignadoA:  { id: tecnico.id, name: tecnico.name, email: tecnico.email },
+      updatedAt:  new Date().toISOString(),
+      historial:  firebase.firestore.FieldValue.arrayUnion({
+        fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+        accion: 'Derivada', detalle: `Asignada a ${tecnico.name}${activable ? ' · Activable' : ''}`, tipo:'ok'
+      }),
+    });
+    const nid = uid();
+    await fdb.collection('notificaciones').doc(nid).set({
+      id: nid, toUserId: tecnico.id, toEmail: tecnico.email,
+      type: 'derivada', icon: '📋',
+      message: `Se te asignó la solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> para ingresar costo estimado.`,
+      solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
+      esActivable: activable, read: false, createdAt: new Date().toISOString(),
+    });
+    toast(`Solicitud derivada a ${tecnico.name} correctamente.`, 'ok');
+  }
+
+  closeModal();
+  renderCostos();
+});
+
+// ── GUARDAR CÓDIGO API/SIM + CECO (solicitante) ───────────
+document.getElementById('btn-guardar-codigo').addEventListener('click', async () => {
+  const tipoCodigo  = document.querySelector('input[name="tipo-codigo"]:checked')?.value || 'API';
+  const numCodigo   = document.getElementById('modal-num-codigo').value.trim();
+  const cecoNumero  = document.getElementById('modal-ceco-numero').value.trim();
+  const cecoNombre  = document.getElementById('modal-ceco-nombre').value.trim();
+  if (!numCodigo)  { toast('Ingresa el número de código API o SIM.', 'err'); return; }
+  if (!cecoNumero) { toast('Ingresa el número de CECO.', 'err'); return; }
+  if (!cecoNombre) { toast('Ingresa el nombre del Centro de Costo.', 'err'); return; }
+
   const sol = DB.sols().find(s => s.id === openSolId);
   if (!sol) return;
 
   await DB.updateSol(openSolId, {
-    estado:     'Derivada',
-    esActivable: activable,
-    asignadoA:  { id: tecnico.id, name: tecnico.name, email: tecnico.email },
-    updatedAt:  new Date().toISOString(),
-    historial:  firebase.firestore.FieldValue.arrayUnion({
+    estado:               'PendienteEjecucion',
+    tipoCodigoSolicitud:  tipoCodigo,
+    codigoSolicitud:      numCodigo,
+    ceco:                 { numero: cecoNumero, nombre: cecoNombre },
+    updatedAt:            new Date().toISOString(),
+    historial: firebase.firestore.FieldValue.arrayUnion({
       fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
-      accion: 'Derivada', detalle: `Asignada a ${tecnico.name}${activable ? ' · Activable' : ''}`, tipo:'ok'
+      accion: 'Código ingresado', detalle: `${tipoCodigo}: ${numCodigo} · CECO ${cecoNumero} — ${cecoNombre}`, tipo:'ok'
     }),
   });
 
-  // Notificar al técnico asignado
-  const nid = uid();
-  await fdb.collection('notificaciones').doc(nid).set({
-    id: nid, toUserId: tecnico.id, toEmail: tecnico.email,
-    type: 'derivada', icon: '📋',
-    message: `Se te asignó la solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> para ingresar costo estimado.`,
-    solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
-    esActivable: activable, read: false, createdAt: new Date().toISOString(),
-  });
-  sendEmail(
-    tecnico.email,
-    `Se te asignó la solicitud ${sol.ticket||''} "${sol.titulo}" para ingresar costo estimado.`,
-    sol.ticket||'', sol.areaGroup||'', sol.prioridad||''
-  );
+  // Notificar a Fescobara para que asigne ejecutor
+  const fescobara = DB.users().find(u => u.email === 'fescobara@sopraval.cl');
+  if (fescobara) {
+    const nid = uid();
+    await fdb.collection('notificaciones').doc(nid).set({
+      id: nid, toUserId: fescobara.id, toEmail: fescobara.email,
+      type: 'pendiente_ejecucion', icon: '🔧',
+      message: `Solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> tiene código ${tipoCodigo} y CECO ingresados. Lista para asignar ejecutor.`,
+      solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
+      esActivable: !!sol.esActivable, read: false, createdAt: new Date().toISOString(),
+    });
+  }
 
-  toast(`Solicitud derivada a ${tecnico.name} correctamente.`, 'ok');
+  toast('Código y CECO guardados. La solicitud fue enviada a Mantenimiento para asignar ejecutor.', 'ok');
   closeModal();
-  renderCostos();
+  reRenderActive();
 });
 
 // Eliminar solicitud
@@ -1153,8 +1244,10 @@ async function decidir(decision) {
   const sol = DB.sols().find(s => s.id === openSolId);
   if (!sol) return;
   const tipoHist = decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn';
+  // Al autorizar → pasa a PendienteCodigo (solicitante debe ingresar API/SIM + CECO)
+  const estadoFinal = decision === 'Autorizada' ? 'PendienteCodigo' : decision;
   await DB.updateSol(openSolId, {
-    estado:            decision,
+    estado:            estadoFinal,
     comentarioGerente: comentario,
     decidedAt:         new Date().toISOString(),
     updatedAt:         new Date().toISOString(),
@@ -1199,7 +1292,7 @@ async function decidir(decision) {
   const solicitante = DB.users().find(u => u.id === sol.userId);
   if (solicitante && solicitante.id !== CU.id) {
     const msgSol = {
-      Autorizada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADA</strong> por Gerencia. ✅`,
+      Autorizada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADA</strong>. ✅ Acción requerida: ingresa el código API o SIM y el CECO para proceder a ejecución.`,
       Postergada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>POSTERGADA</strong> por Gerencia. ⏸️`,
       Rechazada:  `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>RECHAZADA</strong> por Gerencia. ❌`,
     };
@@ -1541,7 +1634,7 @@ const SEGUIMIENTO_LABELS = {
 };
 
 function renderActivables() {
-  const sols = DB.sols().filter(s => s.esActivable && s.estado === 'Autorizada')
+  const sols = DB.sols().filter(s => s.esActivable && ['PendienteCodigo','PendienteEjecucion','EnEjecucion'].includes(s.estado))
     .sort((a,b) => (b.decidedAt||b.createdAt).localeCompare(a.decidedAt||a.createdAt));
   const canEdit = ['mantenimiento','admin'].includes(CU.role);
 

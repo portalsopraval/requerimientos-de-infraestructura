@@ -30,8 +30,11 @@
 
   /* ── Estado badges ── */
   --pendiente-bg:  #FEF9C3; --pendiente-tx:  #713F12;
-  --derivada-bg:   #EDE9FE; --derivada-tx:   #4C1D95;
-  --valorizada-bg: #DBEAFE; --valorizada-tx: #1E3A8A;
+  --derivada-bg:         #EDE9FE; --derivada-tx:         #4C1D95;
+  --valorizada-bg:       #DBEAFE; --valorizada-tx:       #1E3A8A;
+  --pendientecodigo-bg:  #FFF7ED; --pendientecodigo-tx:  #9A3412;
+  --pendienteejecucion-bg:#F0FDF4; --pendienteejecucion-tx:#14532D;
+  --enejecucion-bg:      #ECFDF5; --enejecucion-tx:      #065F46;
   --autorizada-bg: #DCFCE7; --autorizada-tx: #14532D;
   --postergada-bg: #FEF3C7; --postergada-tx: #78350F;
   --rechazada-bg:  #FEE2E2; --rechazada-tx:  #7F1D1D;
@@ -409,8 +412,11 @@ body {
   text-transform:uppercase; letter-spacing:.4px;
 }
 .badge-Pendiente  { background:var(--pendiente-bg);  color:var(--pendiente-tx);  }
-.badge-Derivada   { background:var(--derivada-bg);   color:var(--derivada-tx);   }
-.badge-Valorizada { background:var(--valorizada-bg); color:var(--valorizada-tx); }
+.badge-Derivada          { background:var(--derivada-bg);          color:var(--derivada-tx);          }
+.badge-Valorizada        { background:var(--valorizada-bg);        color:var(--valorizada-tx);        }
+.badge-PendienteCodigo   { background:var(--pendientecodigo-bg);   color:var(--pendientecodigo-tx);   }
+.badge-PendienteEjecucion{ background:var(--pendienteejecucion-bg);color:var(--pendienteejecucion-tx);}
+.badge-EnEjecucion       { background:var(--enejecucion-bg);       color:var(--enejecucion-tx);       }
 .badge-Autorizada { background:var(--autorizada-bg); color:var(--autorizada-tx); }
 .badge-Postergada { background:var(--postergada-bg); color:var(--postergada-tx); }
 .badge-Rechazada  { background:var(--rechazada-bg);  color:var(--rechazada-tx);  }
@@ -1109,8 +1115,11 @@ body {
   --border:     #2e3450;
   --text:       #e2e8f0;
   --pendiente-bg:#2d2a1a; --pendiente-tx:#fbbf24;
-  --derivada-bg:#2e1f4a;  --derivada-tx:#c4b5fd;
-  --valorizada-bg:#1a2040; --valorizada-tx:#93c5fd;
+  --derivada-bg:#2e1f4a;           --derivada-tx:#c4b5fd;
+  --valorizada-bg:#1a2040;         --valorizada-tx:#93c5fd;
+  --pendientecodigo-bg:#3a1f0a;    --pendientecodigo-tx:#fdba74;
+  --pendienteejecucion-bg:#0a2e1a; --pendienteejecucion-tx:#86efac;
+  --enejecucion-bg:#062318;        --enejecucion-tx:#6ee7b7;
   --autorizada-bg:#1a2d1a; --autorizada-tx:#86efac;
   --postergada-bg:#2d2516; --postergada-tx:#fcd34d;
   --rechazada-bg:#2d1a1a;  --rechazada-tx:#fca5a5;
