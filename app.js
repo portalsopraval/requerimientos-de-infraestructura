@@ -231,6 +231,8 @@ fauth.onAuthStateChanged(async (firebaseUser) => {
         return;
       }
       CU = perfil;
+      // Corregir título obsoleto en memoria (por si Firestore aún no fue migrado)
+      if (CU.title === 'Técnico de Mantenimiento') CU.title = 'Jefatura de Área';
       initDashboard();
       showScreen('dashboard');
       backfillNotificaciones().catch(console.error);
