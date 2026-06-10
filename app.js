@@ -919,10 +919,18 @@ function openModal(id) {
     ${(() => { const fs = s.fotos?.length ? s.fotos : (s.foto ? [s.foto] : []); return fs.length ? `<div class="detail-fotos-grid">${fs.map((f,i)=>`<div class="detail-foto-item"><img src="${f}" alt="Foto ${i+1}" class="foto-modal-thumb" /></div>`).join('')}</div>` : ''; })()}
   `;
 
-  // Sección derivar (Fescobara: Pendiente → cotización | PendienteEjecucion → ejecución)
+  // Sección primera revisión (Fescobara: Aceptar/Rechazar solicitud Pendiente sin decisión previa)
+  const secPrimeraRev = document.getElementById('modal-primera-revision');
+  const mostrarPrimeraRev = esCoordinador() && s.estado === 'Pendiente' && !s.decisionCoord;
+  secPrimeraRev.style.display = mostrarPrimeraRev ? '' : 'none';
+  if (mostrarPrimeraRev) {
+    document.getElementById('modal-motivo-rechazo').value = '';
+  }
+
+  // Sección derivar (Fescobara: Pendiente ya aceptada → cotización | PendienteEjecucion → ejecución)
   const secDerivar = document.getElementById('modal-derivar-section');
   const mostrarDerivar = esCoordinador() && (
-    s.estado === 'Pendiente' ||
+    (s.estado === 'Pendiente' && s.decisionCoord === 'aceptada') ||
     s.estado === 'PendienteEjecucion' ||
     (s.estado === 'Autorizada' && s.codigoSolicitud)
   );
@@ -1140,6 +1148,53 @@ document.getElementById('btn-add-comentario').addEventListener('click', async ()
       </div>`).join('');
   }
   toast('Comentario agregado.','ok');
+});
+
+// ── PRIMERA REVISIÓN MODAL (Fescobara: Aceptar/Rechazar Pendiente) ────
+document.getElementById('btn-modal-aceptar-sol').addEventListener('click', async () => {
+  const sol = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+  await DB.updateSol(openSolId, {
+    decisionCoord: 'aceptada',
+    updatedAt: new Date().toISOString(),
+    historial: firebase.firestore.FieldValue.arrayUnion({
+      fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+      accion: 'AceptadaCoordinador', detalle: 'Solicitud aceptada en primera revisión. Procede a derivar a Jefatura de Área.', tipo:'ok'
+    }),
+  });
+  toast('Solicitud aceptada. Ahora puedes derivarla a una Jefatura de Área.', 'ok');
+  closeModal();
+  reRenderActive();
+});
+
+document.getElementById('btn-modal-rechazar-sol').addEventListener('click', async () => {
+  const sol = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+  const motivo = document.getElementById('modal-motivo-rechazo').value.trim();
+  await DB.updateSol(openSolId, {
+    estado: 'Rechazada',
+    decisionCoord: 'rechazada',
+    decidedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    historial: firebase.firestore.FieldValue.arrayUnion({
+      fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+      accion: 'RechazadaCoordinador', detalle: motivo ? `Motivo: ${motivo}` : 'Solicitud rechazada en primera revisión.', tipo:'err'
+    }),
+  });
+  // Notificar al solicitante
+  const solicitante = DB.users().find(u => u.id === sol.userId || u.name === sol.userName);
+  if (solicitante) {
+    const nid = uid();
+    await fdb.collection('notificaciones').doc(nid).set({
+      id: nid, toUserId: solicitante.id, toEmail: solicitante.email,
+      type: 'rechazada', icon: '❌',
+      message: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>RECHAZADA</strong> por el coordinador de mantenimiento.${motivo ? ' Motivo: ' + esc(motivo) : ''}`,
+      solicitudId: sol.id, ticket: sol.ticket||'', read: false, createdAt: new Date().toISOString(),
+    });
+  }
+  toast('Solicitud rechazada y notificación enviada al solicitante.', 'err');
+  closeModal();
+  reRenderActive();
 });
 
 // ── DERIVAR SOLICITUD (Fescobara → técnico) ───────────────
@@ -2054,7 +2109,8 @@ function openNotifPanel() {
   list.innerHTML = notifs.length
     ? notifs.map(n => {
         const esFescobara = esCoordinador();
-        const btnsPrimeraRevision = (esFescobara && n.type === 'nueva' && n.solicitudId && !n.decisionCoord)
+        const solNotif = n.solicitudId ? DB.sols().find(s => s.id === n.solicitudId) : null;
+        const btnsPrimeraRevision = (esFescobara && n.solicitudId && !n.decisionCoord && solNotif && solNotif.estado === 'Pendiente' && !solNotif.decisionCoord)
           ? `<div class="notif-acciones" style="display:flex;gap:6px;margin-top:8px">
                <button class="btn-notif-aceptar" data-solid="${n.solicitudId}" data-docid="${n.docId}" style="flex:1;padding:5px 10px;background:#15803D;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✅ Aceptar</button>
                <button class="btn-notif-rechazar" data-solid="${n.solicitudId}" data-docid="${n.docId}" style="flex:1;padding:5px 10px;background:#B91C1C;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">❌ Rechazar</button>

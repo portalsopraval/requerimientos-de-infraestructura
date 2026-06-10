@@ -654,6 +654,20 @@
       </div>
     </div>
     <div id="modal-body" class="modal-body"></div>
+    <!-- Sección Primera Revisión (Fescobara: Aceptar/Rechazar solicitud Pendiente) -->
+    <div id="modal-primera-revision" class="modal-section" style="display:none">
+      <h4>📋 Primera revisión de solicitud</h4>
+      <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:14px">Revisa la solicitud y decide si procede derivar a Jefatura de Área para valorización.</p>
+      <div style="display:flex;gap:10px">
+        <button id="btn-modal-aceptar-sol" class="btn-primary" style="flex:1;background:#15803D">✅ Aceptar — Derivar a valorización</button>
+        <button id="btn-modal-rechazar-sol" class="btn-primary" style="flex:1;background:#B91C1C">❌ Rechazar solicitud</button>
+      </div>
+      <div class="field" style="margin-top:10px">
+        <label>Motivo de rechazo (opcional)</label>
+        <textarea id="modal-motivo-rechazo" rows="2" placeholder="Indica el motivo si vas a rechazar..."></textarea>
+      </div>
+    </div>
+
     <!-- Sección Derivar (Fescobara: cotización y ejecución) -->
     <div id="modal-derivar-section" class="modal-section" style="display:none">
       <h4 id="derivar-section-titulo">Derivar solicitud a Jefatura</h4>
