@@ -100,6 +100,22 @@ async function seedUsers() {
   if (count > 0) await batch.commit();
 }
 
+// Migración puntual: corregir title de Jefaturas de Área en Firestore
+async function migrateJefaturaTitles() {
+  const emails = ['cmadridp@sopraval.cl','gzapata@sopraval.cl','ccrojas@sopraval.cl','cllopez@sopraval.cl'];
+  const snap = await fdb.collection('users').get();
+  const batch = fdb.batch();
+  let count = 0;
+  snap.docs.forEach(doc => {
+    const d = doc.data();
+    if (emails.includes(d.email) && d.title !== 'Jefatura de Área') {
+      batch.update(fdb.collection('users').doc(doc.id), { title: 'Jefatura de Área' });
+      count++;
+    }
+  });
+  if (count > 0) await batch.commit();
+}
+
 // ── Estado global ──────────────────────────────────────────
 let CU = null;
 let openSolId = null;
@@ -195,6 +211,7 @@ async function loadDataAndStart() {
   _cache.sols  = solsSnap.docs.map(d => d.data());
 
   await seedUsers();
+  await migrateJefaturaTitles();
   const usersSnap2 = await fdb.collection('users').get();
   _cache.users = usersSnap2.docs.map(d => d.data());
 
