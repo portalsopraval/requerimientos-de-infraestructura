@@ -506,6 +506,18 @@
           <p>Indicadores operativos de costos y valorización</p>
         </div>
         <div id="dash-mtt-content"></div>
+        <div id="dash-mtt-charts" style="display:none;margin-top:20px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div class="card" style="padding:16px">
+              <div class="dash-section-title" style="margin-bottom:12px">📊 Estado de solicitudes</div>
+              <canvas id="chart-mtt-estado" height="220"></canvas>
+            </div>
+            <div class="card" style="padding:16px">
+              <div class="dash-section-title" style="margin-bottom:12px">🏭 Solicitudes por área</div>
+              <canvas id="chart-mtt-area" height="220"></canvas>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- TAB: ACTIVABLES -->

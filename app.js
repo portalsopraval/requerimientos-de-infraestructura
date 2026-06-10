@@ -193,6 +193,7 @@ let CU = null;
 let openSolId = null;
 let chartCount = null, chartCost = null;
 let chartTendencia = null, chartRankingAreas = null, chartComparativo = null;
+let chartMttEstado = null, chartMttArea = null;
 let _activeTab = null;
 
 // ── Paginación ─────────────────────────────────────────────
@@ -790,11 +791,15 @@ function renderCostos() {
   let sols = DB.sols();
 
   if (esCoordinador()) {
-    // Fescobara ve: Pendiente (cotización) y PendienteEjecucion/Autorizada con código (asignar ejecutor)
+    // Fescobara ve: toda la cadena activa de solicitudes
     sols = sols.filter(s =>
       s.estado === 'Pendiente' ||
+      s.estado === 'Derivada' ||
+      s.estado === 'Valorizada' ||
+      s.estado === 'PendienteCodigo' ||
       s.estado === 'PendienteEjecucion' ||
       s.estado === 'PendienteRevision' ||
+      s.estado === 'EnEjecucion' ||
       (s.estado === 'Autorizada' && s.codigoSolicitud)
     );
   } else {
@@ -811,7 +816,7 @@ function renderCostos() {
 
   // Título dinámico según rol
   const titulo = document.getElementById('costos-titulo');
-  if (titulo) titulo.textContent = esCoordinador() ? 'Solicitudes Pendientes — Derivar a Técnico' : 'Mis Solicitudes Asignadas — Ingresar Costo';
+  if (titulo) titulo.textContent = esCoordinador() ? 'Seguimiento de Solicitudes Activas' : 'Mis Solicitudes Asignadas — Ingresar Costo';
 
   el.innerHTML = sols.length
     ? `<div class="sol-list">${page.map(s => solCard(s, !esCoordinador())).join('')}</div>${pagHTML(sols.length,_pag.costos,'costos')}`
@@ -1850,6 +1855,47 @@ function renderDashboardMtt() {
             <tbody>${filasAct}</tbody>
           </table></div>`}
     </div>`;
+
+  // ── Gráficas Dashboard-mtt ─────────────────────────────────
+  const chartsEl = document.getElementById('dash-mtt-charts');
+  if (chartsEl && sols.length > 0) {
+    chartsEl.style.display = '';
+
+    // Gráfico 1: por estado
+    const estadoMap = {};
+    sols.forEach(s => { estadoMap[s.estado] = (estadoMap[s.estado]||0)+1; });
+    const estadoColors = {
+      Pendiente:'#F59E0B', Derivada:'#6366F1', Valorizada:'#F97316',
+      Autorizada:'#22C55E', PendienteCodigo:'#0EA5E9', PendienteEjecucion:'#8B5CF6',
+      EnEjecucion:'#14B8A6', PendienteRevision:'#EC4899', Completada:'#10B981',
+      Rechazada:'#EF4444', Postergada:'#9CA3AF',
+    };
+    if (chartMttEstado) { chartMttEstado.destroy(); chartMttEstado = null; }
+    chartMttEstado = new Chart(document.getElementById('chart-mtt-estado'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(estadoMap),
+        datasets: [{ data: Object.values(estadoMap), backgroundColor: Object.keys(estadoMap).map(k => estadoColors[k]||'#94A3B8'), borderWidth:2 }]
+      },
+      options: { plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 } } } }, cutout:'55%' }
+    });
+
+    // Gráfico 2: por área
+    const areaMap = {};
+    sols.forEach(s => { const lbl = s.areaGroup||s.areaCode||'—'; areaMap[lbl] = (areaMap[lbl]||0)+1; });
+    const areaColors = ['#1B3580','#F07B1B','#22C55E','#EF4444','#8B5CF6','#0EA5E9','#F59E0B','#14B8A6'];
+    if (chartMttArea) { chartMttArea.destroy(); chartMttArea = null; }
+    chartMttArea = new Chart(document.getElementById('chart-mtt-area'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(areaMap),
+        datasets: [{ label:'Solicitudes', data: Object.values(areaMap), backgroundColor: Object.keys(areaMap).map((_,i)=>areaColors[i%areaColors.length]), borderRadius:6 }]
+      },
+      options: { plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
+    });
+  } else if (chartsEl) {
+    chartsEl.style.display = 'none';
+  }
 }
 
 // ── ACTIVABLES – SEGUIMIENTO ────────────────────────────────
