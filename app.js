@@ -895,7 +895,8 @@ function openModal(id) {
         <span class="detail-label">Costo estimado</span>
         <span class="detail-value">${s.costo != null ? clp(s.costo) : 'Pendiente de valorización'}</span>
       </div>
-      ${s.notasMtt ? `<div class="detail-item detail-full"><span class="detail-label">Notas de Mantenimiento</span><span class="detail-value">${esc(s.notasMtt)}</span></div>` : ''}
+      ${s.tiempoEstimado ? `<div class="detail-item"><span class="detail-label">Tiempo estimado</span><span class="detail-value">⏱ ${esc(s.tiempoEstimado)}</span></div>` : ''}
+      ${s.notasMtt ? `<div class="detail-item detail-full"><span class="detail-label">Notas de Jefatura</span><span class="detail-value">${esc(s.notasMtt)}</span></div>` : ''}
       ${s.decidedAt ? `<div class="detail-item"><span class="detail-label">Fecha decisión</span><span class="detail-value">${fmt(s.decidedAt)}</span></div>` : ''}
     </div>
     <div class="detail-desc-box">${esc(s.descripcion)}</div>
@@ -978,6 +979,8 @@ function openModal(id) {
   if (secCosto.style.display !== 'none') {
     document.getElementById('modal-costo').value      = '';
     document.getElementById('modal-notas-mtt').value  = s.notasMtt || '';
+    document.getElementById('modal-tiempo-estimado').value = '';
+    document.getElementById('modal-tiempo-unidad').value   = 'horas';
     const radioSi  = document.getElementById('modal-activable-si');
     const radioNo  = document.getElementById('modal-activable-no');
     if (s.esActivable) { radioSi.checked = true; } else { radioNo.checked = true; }
@@ -1280,16 +1283,23 @@ document.getElementById('btn-eliminar-sol').addEventListener('click', async () =
 document.getElementById('btn-guardar-costo').addEventListener('click', async () => {
   const costo = parseFloat(document.getElementById('modal-costo').value);
   if (isNaN(costo) || costo < 0) { toast('Ingrese un costo válido.','err'); return; }
+  const tiempoVal   = document.getElementById('modal-tiempo-estimado').value.trim();
+  const tiempoUnidad = document.getElementById('modal-tiempo-unidad').value;
+  if (!tiempoVal || isNaN(parseFloat(tiempoVal)) || parseFloat(tiempoVal) <= 0) {
+    toast('Ingrese el tiempo estimado de trabajo.','err'); return;
+  }
+  const tiempoEstimado = `${tiempoVal} ${tiempoUnidad}`;
   const notas     = document.getElementById('modal-notas-mtt').value.trim();
   const activable = document.querySelector('input[name="activable"]:checked')?.value === 'si';
   await DB.updateSol(openSolId, {
     costo, notasMtt: notas, esActivable: activable,
+    tiempoEstimado,
     estado: 'Valorizada',
     valorizedAt: new Date().toISOString(),
     updatedAt:   new Date().toISOString(),
     historial: firebase.firestore.FieldValue.arrayUnion({
       fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
-      accion: 'Valorizada', detalle: `Costo: ${clp(costo)}${notas ? ' · '+notas : ''}${activable ? ' · Activable' : ''}`, tipo:'ok'
+      accion: 'Valorizada', detalle: `Costo: ${clp(costo)} · Tiempo: ${tiempoEstimado}${notas ? ' · '+notas : ''}${activable ? ' · Activable' : ''}`, tipo:'ok'
     }),
   });
   // Notificar al Gerente que hay una solicitud lista para autorizar
@@ -1966,15 +1976,25 @@ function openNotifPanel() {
 
   const notifs = _cache.notifs.slice().sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   list.innerHTML = notifs.length
-    ? notifs.map(n => `
+    ? notifs.map(n => {
+        const esFescobara = esCoordinador();
+        const btnsPrimeraRevision = (esFescobara && n.type === 'nueva' && n.solicitudId && !n.decisionCoord)
+          ? `<div class="notif-acciones" style="display:flex;gap:6px;margin-top:8px">
+               <button class="btn-notif-aceptar" data-solid="${n.solicitudId}" data-docid="${n.docId}" style="flex:1;padding:5px 10px;background:#15803D;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✅ Aceptar</button>
+               <button class="btn-notif-rechazar" data-solid="${n.solicitudId}" data-docid="${n.docId}" style="flex:1;padding:5px 10px;background:#B91C1C;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">❌ Rechazar</button>
+             </div>`
+          : (n.decisionCoord ? `<div style="margin-top:6px;font-size:11px;color:${n.decisionCoord==='aceptada'?'#15803D':'#B91C1C'};font-weight:600">${n.decisionCoord==='aceptada'?'✅ Aceptada':'❌ Rechazada'} por coordinador</div>` : '');
+        return `
         <div class="notif-item${n.esActivable ? ' notif-activable' : ''} notif-clickable" data-solid="${n.solicitudId||''}" data-docid="${n.docId}">
           <div class="notif-icon">${n.icon||'🔔'}</div>
-          <div class="notif-body">
+          <div class="notif-body" style="flex:1">
             <div class="notif-msg">${n.message}</div>
             <div class="notif-time">${fmt(n.createdAt)}</div>
+            ${btnsPrimeraRevision}
           </div>
           <button class="notif-mark-read" data-docid="${n.docId}" title="Marcar como leído">✕</button>
-        </div>`).join('')
+        </div>`;
+      }).join('')
     : '<p class="notif-empty">Sin notificaciones nuevas.</p>';
 
   // Clic en notificación → abrir modal de la solicitud y marcarla como leída
@@ -2008,6 +2028,44 @@ function openNotifPanel() {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
       await fdb.collection('notificaciones').doc(btn.dataset.docid).update({ read: true });
+    });
+  });
+
+  // Botones primera revisión Fescobara
+  list.querySelectorAll('.btn-notif-aceptar, .btn-notif-rechazar').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const solId  = btn.dataset.solid;
+      const docId  = btn.dataset.docid;
+      const accion = btn.classList.contains('btn-notif-aceptar') ? 'aceptada' : 'rechazada';
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+      try {
+        const updates = {
+          updatedAt: new Date().toISOString(),
+          historial: firebase.firestore.FieldValue.arrayUnion({
+            fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+            accion: accion === 'aceptada' ? 'AceptadaCoordinador' : 'RechazadaCoordinador',
+            detalle: accion === 'aceptada'
+              ? 'Solicitud aceptada en primera revisión por coordinador'
+              : 'Solicitud rechazada en primera revisión por coordinador',
+            tipo: accion === 'aceptada' ? 'ok' : 'err'
+          }),
+        };
+        if (accion === 'rechazada') {
+          updates.estado = 'Rechazada';
+          updates.decidedAt = new Date().toISOString();
+        }
+        await DB.updateSol(solId, updates);
+        // Marcar notificación con decisión tomada
+        await fdb.collection('notificaciones').doc(docId).update({ read: true, decisionCoord: accion });
+        toast(accion === 'aceptada' ? 'Solicitud aceptada. Puede derivarla desde Gestión de Costos.' : 'Solicitud rechazada y registrada.', accion === 'aceptada' ? 'ok' : 'err');
+        panel.style.display = 'none';
+      } catch (err) {
+        console.error(err);
+        toast('Error al registrar la decisión.', 'err');
+        btn.disabled = false;
+      }
     });
   });
 

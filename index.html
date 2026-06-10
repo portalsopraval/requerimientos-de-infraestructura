@@ -736,9 +736,20 @@
           <input type="number" id="modal-costo" placeholder="Ej: 450000" min="0" />
         </div>
         <div class="field">
-          <label>Notas de Jefatura</label>
-          <input type="text" id="modal-notas-mtt" placeholder="Observaciones técnicas..." />
+          <label>Tiempo estimado de trabajo <span class="req">*</span></label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" id="modal-tiempo-estimado" placeholder="Ej: 3" min="0" style="width:90px" />
+            <select id="modal-tiempo-unidad" style="flex:1">
+              <option value="horas">Horas</option>
+              <option value="días">Días</option>
+              <option value="semanas">Semanas</option>
+            </select>
+          </div>
         </div>
+      </div>
+      <div class="field" style="margin-top:8px">
+        <label>Notas de Jefatura</label>
+        <input type="text" id="modal-notas-mtt" placeholder="Observaciones técnicas..." />
       </div>
       <div class="field" style="margin-top:16px">
         <label style="font-weight:600;margin-bottom:8px;display:block">¿El requerimiento es activable? <span class="req">*</span></label>
