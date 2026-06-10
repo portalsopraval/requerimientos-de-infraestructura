@@ -196,6 +196,7 @@ function reRenderActive() {
   if (_activeTab === 'dashboard-ger')  renderDashboardGer();
   if (_activeTab === 'dashboard-mtt')  renderDashboardMtt();
   if (_activeTab === 'activables')     renderActivables();
+  if (_activeTab === 'tiempos')        renderTiempos();
 }
 
 // ── Listeners en tiempo real ───────────────────────────────
@@ -306,7 +307,7 @@ async function backfillNotificaciones() {
 const TABS = {
   user:         [['home','🏠 Inicio'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes']],
   jefe_area:    [['home','🏠 Inicio'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['revision','Revisión de Solicitudes']],
-  mantenimiento:[['home','🏠 Inicio'],['dashboard-mtt','📊 Dashboard'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['costos','Gestión de Costos'],['revision','Revisión de Solicitudes'],['activables','🔧 Activables'],['visual','Gestión Visual']],
+  mantenimiento:[['home','🏠 Inicio'],['dashboard-mtt','📊 Dashboard'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['costos','Gestión de Costos'],['revision','Revisión de Solicitudes'],['activables','🔧 Activables'],['tiempos','⏱ Tiempos'],['visual','Gestión Visual']],
   supervisor:   [['home','🏠 Inicio'],['nueva','Nueva Solicitud'],['mis','Mis Solicitudes'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
   gerente:      [['home','🏠 Inicio'],['dashboard-ger','📊 Mi Dashboard'],['autorizacion','Autorización Pendiente'],['revision','Revisión de Solicitudes'],['visual','Gestión Visual']],
   admin:        [['revision','Revisión de Solicitudes'],['visual','Gestión Visual'],['kpis','📊 KPIs'],['adminpanel','⚙️ Gestión de Usuarios']],
@@ -339,6 +340,7 @@ function activateTab(id) {
   if (id === 'dashboard-ger')  renderDashboardGer();
   if (id === 'dashboard-mtt')  renderDashboardMtt();
   if (id === 'activables')     renderActivables();
+  if (id === 'tiempos')        renderTiempos();
 }
 
 // ── Login ──────────────────────────────────────────────────
@@ -1006,12 +1008,6 @@ function openModal(id) {
   secAuth.style.display = gerenteCanDecide ? '' : 'none';
   if (gerenteCanDecide) {
     document.getElementById('modal-comentario-gerente').value = '';
-    const avisoEl = document.getElementById('aviso-activable');
-    avisoEl.style.display = s.esActivable ? 'flex' : 'none';
-    if (s.esActivable) {
-      document.getElementById('ger-ceco-numero').value = s.ceco?.numero || '';
-      document.getElementById('ger-ceco-nombre').value = s.ceco?.nombre || '';
-    }
   }
 
   const secChange = document.getElementById('modal-change-section');
@@ -1238,14 +1234,12 @@ document.getElementById('btn-devolver-fescobara').addEventListener('click', asyn
   reRenderActive();
 });
 
-// ── GUARDAR CÓDIGO API/SIM + CECO (solicitante) ───────────
+// ── GUARDAR CÓDIGO API/SIM (solicitante) ───────────────────
 document.getElementById('btn-guardar-codigo').addEventListener('click', async () => {
   const tipoCodigo  = document.querySelector('input[name="tipo-codigo"]:checked')?.value;
   const numCodigo   = document.getElementById('modal-num-codigo').value.trim();
-  const cecoNombre  = document.getElementById('modal-ceco-nombre').value.trim();
-  if (!tipoCodigo) { toast('Selecciona el tipo de código (API, SIM o CECO).', 'err'); return; }
-  if (!numCodigo)  { toast('Ingresa el número de código / CECO.', 'err'); return; }
-  const cecoNumero  = numCodigo; // mismo valor — campo unificado
+  if (!tipoCodigo) { toast('Selecciona el tipo de código (API o SIM).', 'err'); return; }
+  if (!numCodigo)  { toast('Ingresa el número de API / SIM.', 'err'); return; }
 
   const sol = DB.sols().find(s => s.id === openSolId);
   if (!sol) return;
@@ -1254,11 +1248,10 @@ document.getElementById('btn-guardar-codigo').addEventListener('click', async ()
     estado:               'PendienteEjecucion',
     tipoCodigoSolicitud:  tipoCodigo,
     codigoSolicitud:      numCodigo,
-    ceco:                 { numero: cecoNumero, nombre: cecoNombre },
     updatedAt:            new Date().toISOString(),
     historial: firebase.firestore.FieldValue.arrayUnion({
       fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
-      accion: 'Código ingresado', detalle: `${tipoCodigo}: ${numCodigo} · CECO ${cecoNumero} — ${cecoNombre}`, tipo:'ok'
+      accion: 'Código ingresado', detalle: `${tipoCodigo}: ${numCodigo}`, tipo:'ok'
     }),
   });
 
@@ -1269,13 +1262,13 @@ document.getElementById('btn-guardar-codigo').addEventListener('click', async ()
     await fdb.collection('notificaciones').doc(nid).set({
       id: nid, toUserId: fescobara.id, toEmail: fescobara.email,
       type: 'pendiente_ejecucion', icon: '🔧',
-      message: `Solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> tiene código ${tipoCodigo} y CECO ingresados. Lista para asignar ejecutor.`,
+      message: `Solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> tiene código ${tipoCodigo} ingresado. Lista para asignar ejecutor.`,
       solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
       esActivable: !!sol.esActivable, read: false, createdAt: new Date().toISOString(),
     });
   }
 
-  toast('Código y CECO guardados. La solicitud fue enviada a Jefatura de Área para asignar ejecutor.', 'ok');
+  toast('Código guardado. La solicitud fue enviada a Jefatura de Área para asignar ejecutor.', 'ok');
   closeModal();
   reRenderActive();
 });
@@ -1355,36 +1348,19 @@ async function decidir(decision) {
   const sol = DB.sols().find(s => s.id === openSolId);
   if (!sol) return;
 
-  // Si es activable y el gerente autoriza, leer CECO ingresado en el aviso
-  if (decision === 'Autorizada' && sol.esActivable) {
-    const cecoNum  = document.getElementById('ger-ceco-numero')?.value.trim();
-    const cecoNom  = document.getElementById('ger-ceco-nombre')?.value.trim();
-    if (!cecoNum || !cecoNom) {
-      toast('Ingresa el CECO y el nombre del Centro de Costo antes de autorizar.', 'err');
-      return;
-    }
-  }
-
   const tipoHist = decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn';
   // Al autorizar → pasa a PendienteCodigo (solicitante debe ingresar API/SIM)
   const estadoFinal = decision === 'Autorizada' ? 'PendienteCodigo' : decision;
 
-  // Guardar CECO si fue ingresado por el gerente (activables)
-  const cecoGerente = (decision === 'Autorizada' && sol.esActivable)
-    ? { numero: document.getElementById('ger-ceco-numero').value.trim(),
-        nombre: document.getElementById('ger-ceco-nombre').value.trim() }
-    : null;
-
   await DB.updateSol(openSolId, {
     estado:            estadoFinal,
     comentarioGerente: comentario,
-    ...(cecoGerente ? { ceco: cecoGerente } : {}),
     decidedAt:         new Date().toISOString(),
     updatedAt:         new Date().toISOString(),
     historial: firebase.firestore.FieldValue.arrayUnion({
       fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
       accion: decision,
-      detalle: `${comentario || ''}${cecoGerente ? ` · CECO ${cecoGerente.numero} — ${cecoGerente.nombre}` : ''}`,
+      detalle: comentario || '',
       tipo: tipoHist
     }),
   });
@@ -1424,7 +1400,7 @@ async function decidir(decision) {
   const solicitante = DB.users().find(u => u.id === sol.userId);
   if (solicitante && solicitante.id !== CU.id) {
     const msgSol = {
-      Autorizada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADA</strong>. ✅ Acción requerida: ingresa el código API o SIM y el CECO para proceder a ejecución.`,
+      Autorizada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADA</strong>. ✅ Acción requerida: ingresa el código API o SIM para proceder a ejecución.`,
       Postergada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>POSTERGADA</strong> por Gerencia. ⏸️`,
       Rechazada:  `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>RECHAZADA</strong> por Gerencia. ❌`,
     };
@@ -1466,11 +1442,11 @@ function showAvisoActivable(sol) {
         <div class="aam-opciones">
           <div class="aam-opt aam-api">
             <span class="aam-opt-icon">📄</span>
-            <div><strong>API</strong><small>Acta de Pedido Interno</small></div>
+            <div><strong>API</strong><small>Autorización para Invertir</small></div>
           </div>
           <div class="aam-opt aam-sim">
             <span class="aam-opt-icon">📋</span>
-            <div><strong>SIM</strong><small>Solicitud de Inversión y Mantenimiento</small></div>
+            <div><strong>SIM</strong><small>Solicitud de Inversión Menor</small></div>
           </div>
         </div>
         ${sol.ceco ? `
@@ -1823,6 +1799,91 @@ function renderActivables() {
       });
     });
   }
+}
+
+// ── SEMÁFORO DE TIEMPOS (Fescobara) ───────────────────────
+function renderTiempos() {
+  if (!esCoordinador()) return;
+  const el = document.getElementById('pane-tiempos');
+  if (!el) return;
+
+  // Solicitudes derivadas con tiempo estimado asignado
+  const sols = DB.sols().filter(s =>
+    ['Derivada','Valorizada','PendienteCodigo','PendienteEjecucion','EnEjecucion'].includes(s.estado) && s.tiempoEstimado
+  ).sort((a,b) => (a.derivadaAt||a.createdAt).localeCompare(b.derivadaAt||b.createdAt));
+
+  if (!sols.length) {
+    el.innerHTML = `<div class="page-header"><h1>⏱ Control de Tiempos</h1><p>Semáforo de cumplimiento por Jefatura de Área</p></div>
+      <p class="empty-msg">No hay solicitudes con tiempo estimado registrado.</p>`;
+    return;
+  }
+
+  function parseTiempoHoras(str) {
+    if (!str) return null;
+    const m = str.match(/([\d.]+)\s*(hora|día|semana)/i);
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    const u = m[2].toLowerCase();
+    if (u.startsWith('hora'))   return n;
+    if (u.startsWith('día') || u.startsWith('dia')) return n * 8;
+    if (u.startsWith('semana')) return n * 40;
+    return null;
+  }
+
+  function semaforo(pct) {
+    if (pct === null) return { color:'#6B7280', icon:'⚪', label:'Sin datos', bg:'#F3F4F6' };
+    if (pct <= 50)    return { color:'#15803D', icon:'🟢', label:'A tiempo',   bg:'#DCFCE7' };
+    if (pct <= 90)    return { color:'#B45309', icon:'🟡', label:'En riesgo',  bg:'#FEF9C3' };
+    if (pct <= 100)   return { color:'#C2410C', icon:'🟠', label:'Límite',     bg:'#FFEDD5' };
+    return                   { color:'#B91C1C', icon:'🔴', label:'Vencido',    bg:'#FEE2E2' };
+  }
+
+  const now = Date.now();
+  const filas = sols.map(s => {
+    const inicio   = new Date(s.derivadaAt || s.createdAt).getTime();
+    const horasTranscurridas = (now - inicio) / 3600000;
+    const horasEstimadas     = parseTiempoHoras(s.tiempoEstimado);
+    const pct  = horasEstimadas ? Math.round((horasTranscurridas / horasEstimadas) * 100) : null;
+    const sem  = semaforo(pct);
+    const diasTrans = (horasTranscurridas / 8).toFixed(1);
+    const barra = pct !== null
+      ? `<div style="background:#E5E7EB;border-radius:6px;height:8px;width:100%;margin-top:4px">
+           <div style="background:${sem.color};border-radius:6px;height:8px;width:${Math.min(pct,100)}%;transition:width .4s"></div>
+         </div><small style="color:${sem.color};font-weight:600">${pct}% del tiempo estimado</small>`
+      : '';
+    return `
+      <tr style="background:${sem.bg}20" class="fila-link" onclick="openModal('${s.id}')">
+        <td><span class="badge badge-${s.estado}">${s.estado}</span></td>
+        <td><strong>${esc(s.ticket||'—')}</strong></td>
+        <td>${esc(s.titulo)}</td>
+        <td>${esc(s.asignadoA?.name||'—')}</td>
+        <td>${esc(s.tiempoEstimado)}</td>
+        <td>${diasTrans} días háb.</td>
+        <td style="text-align:center;font-size:1.3rem" title="${sem.label}">${sem.icon}</td>
+        <td><div>${barra}</div></td>
+      </tr>`;
+  });
+
+  el.innerHTML = `
+    <div class="page-header">
+      <h1>⏱ Control de Tiempos</h1>
+      <p>Semáforo de cumplimiento por Jefatura de Área</p>
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+      <span style="background:#DCFCE7;color:#15803D;padding:4px 10px;border-radius:20px;font-size:.82rem;font-weight:600">🟢 A tiempo (&lt;50%)</span>
+      <span style="background:#FEF9C3;color:#B45309;padding:4px 10px;border-radius:20px;font-size:.82rem;font-weight:600">🟡 En riesgo (50–90%)</span>
+      <span style="background:#FFEDD5;color:#C2410C;padding:4px 10px;border-radius:20px;font-size:.82rem;font-weight:600">🟠 Límite (90–100%)</span>
+      <span style="background:#FEE2E2;color:#B91C1C;padding:4px 10px;border-radius:20px;font-size:.82rem;font-weight:600">🔴 Vencido (&gt;100%)</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>Estado</th><th>Ticket</th><th>Título</th><th>Jefatura</th>
+          <th>Tiempo estimado</th><th>Transcurrido</th><th style="text-align:center">Semáforo</th><th>Avance</th>
+        </tr></thead>
+        <tbody>${filas.join('')}</tbody>
+      </table>
+    </div>`;
 }
 
 // ── GESTIÓN VISUAL ─────────────────────────────────────────

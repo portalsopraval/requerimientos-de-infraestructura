@@ -517,6 +517,9 @@
         <div id="activables-content"></div>
       </div>
 
+      <!-- TAB: TIEMPOS -->
+      <div class="tab-pane" id="pane-tiempos"></div>
+
     </div><!-- /dashboard-body -->
   </div><!-- /screen-dashboard -->
 
@@ -684,7 +687,7 @@
       <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:14px">Tu solicitud fue autorizada. Completa los siguientes datos para proceder a la ejecución del trabajo.</p>
       <div class="field">
         <label style="font-weight:600;margin-bottom:10px;display:block">Tipo de código <span class="req">*</span></label>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
           <label style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;padding:14px 10px;border:1.5px solid var(--border);border-radius:10px;text-align:center;transition:border-color .2s">
             <input type="radio" name="tipo-codigo" id="modal-tipo-codigo-api" value="API" />
             <span style="font-size:1.3rem">📋</span>
@@ -695,21 +698,14 @@
             <span style="font-size:1.3rem">🔧</span>
             <span><strong>SIM</strong><br><small style="color:var(--text-muted)">Solicitud de Inversión Menor</small></span>
           </label>
-          <label style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;padding:14px 10px;border:1.5px solid var(--border);border-radius:10px;text-align:center;transition:border-color .2s">
-            <input type="radio" name="tipo-codigo" id="modal-tipo-codigo-ceco" value="CECO" />
-            <span style="font-size:1.3rem">🏦</span>
-            <span><strong>CECO</strong><br><small style="color:var(--text-muted)">Centro de Costo</small></span>
-          </label>
         </div>
+        <input type="hidden" id="modal-tipo-codigo-ceco" value="" />
       </div>
       <div class="field" style="margin-top:14px">
-        <label>Número de Código / CECO <span class="req">*</span></label>
+        <label>Número de API / SIM <span class="req">*</span></label>
         <input type="text" id="modal-num-codigo" placeholder="Ej: API-2026-0042" />
         <input type="hidden" id="modal-ceco-numero" />
-      </div>
-      <div class="field" style="margin-top:8px">
-        <label>Nombre Centro de Costo <span style="color:var(--text-muted);font-weight:400">(opcional)</span></label>
-        <input type="text" id="modal-ceco-nombre" placeholder="Ej: Producción Procesados" />
+        <input type="hidden" id="modal-ceco-nombre" />
       </div>
       <button id="btn-guardar-codigo" class="btn-primary" style="margin-top:16px">✅ Confirmar y enviar a ejecución</button>
     </div>
@@ -774,23 +770,8 @@
         <label>Comentario (opcional)</label>
         <textarea id="modal-comentario-gerente" rows="2" placeholder="Justificación de la decisión..."></textarea>
       </div>
-      <div id="aviso-activable" class="aviso-activable" style="display:none">
-        <span class="aviso-icon">⚠️</span>
-        <div style="flex:1">
-          <strong>Requerimiento ACTIVABLE</strong>
-          <p>Al autorizar, el solicitante deberá ingresar el código <strong>API</strong> o <strong>SIM</strong> y el <strong>CECO</strong> (Centro de Costo) que financiará la ejecución del trabajo.</p>
-          <div class="grid-2" style="margin-top:10px">
-            <div class="field">
-              <label style="font-size:.82rem">Número CECO <span class="req">*</span></label>
-              <input type="text" id="ger-ceco-numero" placeholder="Ej: 1042" style="font-size:.85rem" />
-            </div>
-            <div class="field">
-              <label style="font-size:.82rem">Nombre Centro de Costo <span class="req">*</span></label>
-              <input type="text" id="ger-ceco-nombre" placeholder="Ej: Producción Procesados" style="font-size:.85rem" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <input type="hidden" id="ger-ceco-numero" />
+      <input type="hidden" id="ger-ceco-nombre" />
       <div class="auth-btn-row">
         <button id="btn-autorizar"  class="btn-autorizar">✔ Autorizar</button>
         <button id="btn-postergar" class="btn-postergar">⏸ Postergar</button>
