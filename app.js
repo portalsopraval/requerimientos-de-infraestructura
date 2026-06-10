@@ -129,6 +129,65 @@ async function migrateJefaturaTitles() {
   if (count > 0) await batch.commit();
 }
 
+// ── Seed solicitudes demo de Tiempos (flag one-shot en Firestore) ─
+async function seedTestTiempos() {
+  const flagRef = fdb.collection('config').doc('seed_test_tiempos');
+  const flag    = await flagRef.get();
+  if (flag.exists) return;
+
+  const jefaturas = [
+    { email:'gzapata@sopraval.cl',   name:'Gonzalo Zapata' },
+    { email:'cmadridp@sopraval.cl',  name:'Cristobal Madrid' },
+  ];
+  const usersSnap = await fdb.collection('users').get();
+  const jefDocs   = usersSnap.docs.map(d => d.data()).filter(u =>
+    jefaturas.some(j => j.email === u.email)
+  );
+  const findJef = email => jefDocs.find(u => u.email === email) || { id: email, name: jefaturas.find(j=>j.email===email)?.name, email };
+
+  const now   = new Date();
+  const hace4dias  = new Date(now - 4 * 24 * 3600 * 1000).toISOString(); // ~320% de 1 día → 🔴
+  const hace2horas = new Date(now - 2 * 3600 * 1000).toISOString();       // ~25% de 1 día  → 🟢
+
+  const solicitudes = [
+    {
+      id: uid(), ticket: 'REQ-DEMO-001',
+      titulo: 'Reparación bomba sala de procesos',
+      descripcion: 'Falla en bomba hidráulica de la sala de procesos. Requiere revisión urgente.',
+      estado: 'Derivada', prioridad: 'Alta', motivo: 'Falla equipo',
+      areaCode: 'A', areaGroup: 'Producción', areaSub: 'Chiller – Túnel de frío',
+      userId: 'demo', userName: 'Jonathan Gomez',
+      tiempoEstimado: '1 día',
+      asignadoA: { id: findJef('gzapata@sopraval.cl').id, name: 'Gonzalo Zapata', email: 'gzapata@sopraval.cl' },
+      decisionCoord: 'aceptada',
+      derivadaAt: hace4dias,
+      createdAt: hace4dias, updatedAt: hace4dias,
+      historial: [{ fecha: hace4dias, usuario:'Fabián Escobar', rol:'mantenimiento', accion:'Derivada', detalle:'Derivada a Gonzalo Zapata', tipo:'ok' }],
+      comentarios: [], fotos: [], esActivable: false,
+    },
+    {
+      id: uid(), ticket: 'REQ-DEMO-002',
+      titulo: 'Instalación luminaria sala de descanso',
+      descripcion: 'Se requiere instalar luminaria LED en sala de descanso del área de calidad.',
+      estado: 'Derivada', prioridad: 'Baja', motivo: 'Mejora Estructural',
+      areaCode: 'C', areaGroup: 'Calidad', areaSub: 'Calidad',
+      userId: 'demo', userName: 'Gabriela Cordova',
+      tiempoEstimado: '1 día',
+      asignadoA: { id: findJef('cmadridp@sopraval.cl').id, name: 'Cristobal Madrid', email: 'cmadridp@sopraval.cl' },
+      decisionCoord: 'aceptada',
+      derivadaAt: hace2horas,
+      createdAt: hace2horas, updatedAt: hace2horas,
+      historial: [{ fecha: hace2horas, usuario:'Fabián Escobar', rol:'mantenimiento', accion:'Derivada', detalle:'Derivada a Cristobal Madrid', tipo:'ok' }],
+      comentarios: [], fotos: [], esActivable: false,
+    },
+  ];
+
+  const batch = fdb.batch();
+  solicitudes.forEach(s => batch.set(fdb.collection('solicitudes').doc(s.id), s));
+  batch.set(flagRef, { createdAt: now.toISOString() });
+  await batch.commit();
+}
+
 // ── Estado global ──────────────────────────────────────────
 let CU = null;
 let openSolId = null;
@@ -226,6 +285,7 @@ async function loadDataAndStart() {
 
   await seedUsers();
   await migrateJefaturaTitles();
+  await seedTestTiempos();
   const usersSnap2 = await fdb.collection('users').get();
   _cache.users = usersSnap2.docs.map(d => d.data());
 
