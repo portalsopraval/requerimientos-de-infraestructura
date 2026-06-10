@@ -106,9 +106,22 @@ async function migrateJefaturaTitles() {
   const snap = await fdb.collection('users').get();
   const batch = fdb.batch();
   let count = 0;
+  // Eliminar documentos duplicados (mismo email, mantener el primero encontrado)
+  const seenEmails = new Map();
   snap.docs.forEach(doc => {
     const d = doc.data();
-    if (emails.includes(d.email) && d.title !== 'Jefatura de Área') {
+    if (!d.email) return;
+    if (seenEmails.has(d.email)) {
+      batch.delete(fdb.collection('users').doc(doc.id));
+      count++;
+    } else {
+      seenEmails.set(d.email, doc.id);
+    }
+  });
+  // Corregir title de Jefaturas de Área
+  snap.docs.forEach(doc => {
+    const d = doc.data();
+    if (emails.includes(d.email) && d.title !== 'Jefatura de Área' && seenEmails.get(d.email) === doc.id) {
       batch.update(fdb.collection('users').doc(doc.id), { title: 'Jefatura de Área' });
       count++;
     }
@@ -913,7 +926,9 @@ function openModal(id) {
   );
   secDerivar.style.display = mostrarDerivar ? '' : 'none';
   if (mostrarDerivar) {
-    const tecnicos = DB.users().filter(u => u.role === 'mantenimiento' && u.email !== 'fescobara@sopraval.cl');
+    const tecnicosRaw = DB.users().filter(u => u.role === 'mantenimiento' && u.email !== 'fescobara@sopraval.cl');
+    const seenEmails = new Set();
+    const tecnicos = tecnicosRaw.filter(u => { if (seenEmails.has(u.email)) return false; seenEmails.add(u.email); return true; });
     const sel = document.getElementById('modal-tecnico-asignado');
     const ejecucion = s.estado === 'PendienteEjecucion';
     document.getElementById('derivar-section-titulo').textContent = ejecucion ? 'Asignar ejecutor de trabajo' : 'Derivar solicitud a Jefatura';
