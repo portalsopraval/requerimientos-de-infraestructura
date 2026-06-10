@@ -80,10 +80,10 @@ async function seedUsers() {
     { email:'rtrigo@sopraval.cl',       name:'Ricardo Trigo',     role:'jefe_area',     areaCode:'F', areaGroup:'Despacho',      areaSub:'Despacho',                             title:'Jefe de Despacho' },
     { email:'nmarquez@sopraval.cl',     name:'Nicolás Marquez',   role:'jefe_area',     areaCode:'G', areaGroup:'Rendering',     areaSub:'Planta de Rendering',                  title:'Jefe de Planta Rendering' },
     { email:'gvelizm@sopraval.cl',      name:'Gino Veliz',        role:'admin',         areaCode:'G0',areaGroup:'Gerencia',      areaSub:'Administración Portal',                title:'Administrador del Sistema' },
-    { email:'cmadridp@sopraval.cl',     name:'Cristobal Madrid',  role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Técnico de Mantenimiento' },
-    { email:'gzapata@sopraval.cl',      name:'Gonzalo Zapata',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Técnico de Mantenimiento' },
-    { email:'ccrojas@sopraval.cl',      name:'Cristian Rojas',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Técnico de Mantenimiento' },
-    { email:'cllopez@sopraval.cl',      name:'Claudio Lopez',     role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Técnico de Mantenimiento' },
+    { email:'cmadridp@sopraval.cl',     name:'Cristobal Madrid',  role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
+    { email:'gzapata@sopraval.cl',      name:'Gonzalo Zapata',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
+    { email:'ccrojas@sopraval.cl',      name:'Cristian Rojas',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
+    { email:'cllopez@sopraval.cl',      name:'Claudio Lopez',     role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
   ];
   const existingEmails = new Set(_cache.users.map(u => u.email));
   const batch = fdb.batch();
@@ -657,7 +657,7 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
     });
   }
 
-  toast('Requerimiento enviado correctamente. Mantenimiento revisará el costo estimado.','ok');
+  toast('Requerimiento enviado correctamente. La Jefatura de Área revisará el costo estimado.','ok');
   document.getElementById('form-solicitud').reset();
   document.querySelectorAll('input[name="prioridad"]').forEach(r => r.checked = false);
   fotosBase64 = [];
@@ -1238,7 +1238,7 @@ document.getElementById('btn-guardar-codigo').addEventListener('click', async ()
     });
   }
 
-  toast('Código y CECO guardados. La solicitud fue enviada a Mantenimiento para asignar ejecutor.', 'ok');
+  toast('Código y CECO guardados. La solicitud fue enviada a Jefatura de Área para asignar ejecutor.', 'ok');
   closeModal();
   reRenderActive();
 });
@@ -2243,7 +2243,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
 const ROLE_LABELS = {
   user:         'Usuario',
   jefe_area:    'Jefe de Área',
-  mantenimiento:'Mantenimiento',
+  mantenimiento:'Jefatura de Área',
   supervisor:   'Supervisora Admin.',
   gerente:      'Gerente de Planta',
   admin:        'Administrador',
