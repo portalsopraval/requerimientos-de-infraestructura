@@ -861,6 +861,7 @@ function renderCostos() {
       s.estado === 'Pendiente' ||
       s.estado === 'Derivada' ||
       s.estado === 'Valorizada' ||
+      s.estado === 'PendienteCeco' ||
       s.estado === 'PendienteCodigo' ||
       s.estado === 'PendienteEjecucion' ||
       s.estado === 'PendienteRevision' ||
@@ -868,8 +869,8 @@ function renderCostos() {
       (s.estado === 'Autorizada' && s.codigoSolicitud)
     );
   } else {
-    // Técnicos ven solo solicitudes Derivada asignadas a ellos
-    sols = sols.filter(s => s.estado === 'Derivada' && s.asignadoA?.id === CU.id);
+    // Técnicos ven solicitudes Derivada (ingresar costo) y PendienteCeco (ingresar imputación) asignadas a ellos
+    sols = sols.filter(s => (s.estado === 'Derivada' || s.estado === 'PendienteCeco') && s.asignadoA?.id === CU.id);
   }
 
   if (estado) sols = sols.filter(s => s.estado === estado);
@@ -935,7 +936,7 @@ function renderRevision() {
 
 function statsBar(sols) {
   const cnt = (est) => sols.filter(s=>s.estado===est).length;
-  const estados = ['Pendiente','Derivada','Valorizada','PendienteCodigo','PendienteEjecucion','EnEjecucion','PendienteRevision','Postergada','Rechazada'];
+  const estados = ['Pendiente','Derivada','Valorizada','PendienteCeco','PendienteCodigo','PendienteEjecucion','EnEjecucion','PendienteRevision','Postergada','Rechazada'];
   return `<div class="stats-bar">${estados.map(e=>
     `<div class="stat-pill"><span class="stat-n">${cnt(e)}</span>${e}</div>`
   ).join('')}<div class="stat-pill"><span class="stat-n">${sols.length}</span>Total</div></div>`;
@@ -1139,6 +1140,17 @@ function openModal(id) {
     const radioSi  = document.getElementById('modal-activable-si');
     const radioNo  = document.getElementById('modal-activable-no');
     if (s.esActivable) { radioSi.checked = true; } else { radioNo.checked = true; }
+  }
+
+  // Sección imputación (CECO + Clase de Cuenta) — valorizador, tras autorización, solo NO activables
+  const secImput = document.getElementById('modal-imputacion-section');
+  const esValorizador = s.asignadoA?.id === CU.id || s.asignadoA?.name === CU.name || s.asignadoA?.email === CU.email;
+  const mostrarImput = s.estado === 'PendienteCeco' && esValorizador;
+  secImput.style.display = mostrarImput ? '' : 'none';
+  if (mostrarImput) {
+    document.getElementById('modal-imputacion-numero').value = s.ceco?.numero || '';
+    document.getElementById('modal-imputacion-clase').value  = s.ceco?.claseCuenta || '';
+    document.getElementById('modal-imputacion-nombre').value = s.ceco?.nombre || '';
   }
 
   const secAuth = document.getElementById('modal-auth-section');
@@ -1458,6 +1470,46 @@ document.getElementById('btn-guardar-codigo').addEventListener('click', async ()
   reRenderActive();
 });
 
+// ── GUARDAR IMPUTACIÓN CECO + CLASE DE CUENTA (valorizador, NO activable) ──
+document.getElementById('btn-guardar-imputacion').addEventListener('click', async () => {
+  const cecoNum   = document.getElementById('modal-imputacion-numero').value.trim();
+  const cecoClase = document.getElementById('modal-imputacion-clase').value.trim();
+  const cecoNom   = document.getElementById('modal-imputacion-nombre').value.trim();
+  if (!cecoNum || !cecoClase || !cecoNom) {
+    toast('Ingresa el Centro de Costo (N°, clase de cuenta y nombre) al cual imputar el gasto.', 'err');
+    return;
+  }
+  const sol = DB.sols().find(s => s.id === openSolId);
+  if (!sol) return;
+
+  await DB.updateSol(openSolId, {
+    ceco:      { numero: cecoNum, claseCuenta: cecoClase, nombre: cecoNom },
+    estado:    'PendienteEjecucion',
+    updatedAt: new Date().toISOString(),
+    historial: firebase.firestore.FieldValue.arrayUnion({
+      fecha: new Date().toISOString(), usuario: CU.name, rol: CU.role,
+      accion: 'Imputación ingresada', detalle: `CECO ${cecoNum} · Clase ${cecoClase} · ${cecoNom}`, tipo:'ok'
+    }),
+  });
+
+  // Notificar a Fescobara para que asigne ejecutor
+  const fescobara = DB.users().find(u => u.email === 'fescobara@sopraval.cl');
+  if (fescobara) {
+    const nid = uid();
+    await fdb.collection('notificaciones').doc(nid).set({
+      id: nid, toUserId: fescobara.id, toEmail: fescobara.email,
+      type: 'pendiente_ejecucion', icon: '🔧',
+      message: `Solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> tiene imputación (CECO ${esc(cecoNum)}) ingresada. Lista para asignar ejecutor.`,
+      solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
+      esActivable: false, read: false, createdAt: new Date().toISOString(),
+    });
+  }
+
+  toast('Imputación guardada. La solicitud fue enviada a Mantenimiento para asignar ejecutor.', 'ok');
+  closeModal();
+  reRenderActive();
+});
+
 // Eliminar solicitud
 document.getElementById('btn-eliminar-sol').addEventListener('click', async () => {
   const sol = DB.sols().find(s => s.id === openSolId);
@@ -1534,8 +1586,12 @@ async function decidir(decision) {
   if (!sol) return;
 
   const tipoHist = decision==='Autorizada'?'ok':decision==='Rechazada'?'err':'warn';
-  // Al autorizar → pasa a PendienteCodigo (solicitante debe ingresar API/SIM)
-  const estadoFinal = decision === 'Autorizada' ? 'PendienteCodigo' : decision;
+  // Al autorizar:
+  //  • Activable  → PendienteCodigo (el solicitante debe ingresar API/SIM)
+  //  • No activable → vuelve al valorizador para ingresar CECO + Clase de Cuenta (PendienteCeco)
+  const estadoFinal = decision === 'Autorizada'
+    ? (sol.esActivable ? 'PendienteCodigo' : 'PendienteCeco')
+    : decision;
 
   await DB.updateSol(openSolId, {
     estado:            estadoFinal,
@@ -1555,7 +1611,7 @@ async function decidir(decision) {
   const mantenimientoUsers = DB.users().filter(u => u.role === 'mantenimiento');
   const iconos = { Autorizada:'✅', Postergada:'⏸️', Rechazada:'❌' };
   const msgs = {
-    Autorizada: `Requerimiento ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADO</strong> por Gerencia.${sol.esActivable ? ' Requiere gestión de <strong>API o SIM</strong>.' : ''}`,
+    Autorizada: `Requerimiento ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADO</strong> por Gerencia.${sol.esActivable ? ' Requiere gestión de <strong>API o SIM</strong>.' : ' Acción requerida: ingresar <strong>CECO + Clase de Cuenta</strong> para imputar el gasto.'}`,
     Postergada: `Requerimiento ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>POSTERGADO</strong> por Gerencia.`,
     Rechazada:  `Requerimiento ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>RECHAZADO</strong> por Gerencia.`,
   };
@@ -1585,7 +1641,9 @@ async function decidir(decision) {
   const solicitante = DB.users().find(u => u.id === sol.userId);
   if (solicitante && solicitante.id !== CU.id) {
     const msgSol = {
-      Autorizada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADA</strong>. ✅ Acción requerida: ingresa el código API o SIM para proceder a ejecución.`,
+      Autorizada: sol.esActivable
+        ? `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADA</strong>. ✅ Acción requerida: ingresa el código API o SIM para proceder a ejecución.`
+        : `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>AUTORIZADA</strong>. ✅ Pendiente de imputación contable (CECO) por Mantenimiento.`,
       Postergada: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>POSTERGADA</strong> por Gerencia. ⏸️`,
       Rechazada:  `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>RECHAZADA</strong> por Gerencia. ❌`,
     };
@@ -1931,7 +1989,7 @@ function renderDashboardMtt() {
     sols.forEach(s => { estadoMap[s.estado] = (estadoMap[s.estado]||0)+1; });
     const estadoColors = {
       Pendiente:'#F59E0B', Derivada:'#6366F1', Valorizada:'#F97316',
-      Autorizada:'#22C55E', PendienteCodigo:'#0EA5E9', PendienteEjecucion:'#8B5CF6',
+      Autorizada:'#22C55E', PendienteCeco:'#0284C7', PendienteCodigo:'#0EA5E9', PendienteEjecucion:'#8B5CF6',
       EnEjecucion:'#14B8A6', PendienteRevision:'#EC4899', Completada:'#10B981',
       Rechazada:'#EF4444', Postergada:'#9CA3AF',
     };

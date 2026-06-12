@@ -798,6 +798,24 @@
       </div>
       <button id="btn-guardar-costo" class="btn-primary" style="margin-top:16px">Guardar costo y enviar a autorización</button>
     </div>
+
+    <!-- Imputación contable (CECO + Clase de Cuenta) — valorizador, tras autorización del Gerente, solo NO activables -->
+    <div id="modal-imputacion-section" class="modal-section" style="display:none">
+      <h4>🏦 Imputación del gasto — Acción requerida</h4>
+      <p style="color:var(--text-muted);font-size:.88rem;margin-bottom:14px">El requerimiento fue <strong>autorizado</strong> por Gerencia. Ingresa el Centro de Costo y la Clase de Cuenta a la cual imputar el gasto para enviarlo a ejecución.</p>
+      <div class="field">
+        <label style="font-weight:600;margin-bottom:8px;display:block">Centro de Costo a imputar el gasto <span class="req">*</span></label>
+        <div class="grid-2">
+          <input type="text" id="modal-imputacion-numero" placeholder="N° CECO (ej: 4100-23)" />
+          <input type="text" id="modal-imputacion-clase" placeholder="Clase de cuenta (ej: 6201001)" />
+        </div>
+        <div class="field" style="margin-top:8px">
+          <input type="text" id="modal-imputacion-nombre" placeholder="Nombre / glosa del centro de costo" />
+        </div>
+      </div>
+      <button id="btn-guardar-imputacion" class="btn-primary" style="margin-top:16px">✅ Guardar imputación y enviar a ejecución</button>
+    </div>
+
     <div id="modal-auth-section" class="modal-section" style="display:none">
       <h4>Decisión de autorización</h4>
       <div class="field">

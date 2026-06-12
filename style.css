@@ -414,6 +414,7 @@ body {
 .badge-Pendiente  { background:var(--pendiente-bg);  color:var(--pendiente-tx);  }
 .badge-Derivada          { background:var(--derivada-bg);          color:var(--derivada-tx);          }
 .badge-Valorizada        { background:var(--valorizada-bg);        color:var(--valorizada-tx);        }
+.badge-PendienteCeco     { background:#DBEAFE;                     color:#0284C7;                     }
 .badge-PendienteCodigo   { background:var(--pendientecodigo-bg);   color:var(--pendientecodigo-tx);   }
 .badge-PendienteEjecucion{ background:var(--pendienteejecucion-bg);color:var(--pendienteejecucion-tx);}
 .badge-EnEjecucion       { background:var(--enejecucion-bg);       color:var(--enejecucion-tx);       }
