@@ -126,6 +126,17 @@ async function migrateJefaturaTitles() {
       count++;
     }
   });
+  // Seguridad: eliminar contraseñas en texto plano que pudieran quedar en los perfiles.
+  // Las credenciales las gestiona Firebase Auth; este campo es residual del esquema viejo.
+  snap.docs.forEach(doc => {
+    const d = doc.data();
+    if (d.password !== undefined && seenEmails.get(d.email) === doc.id) {
+      batch.update(fdb.collection('users').doc(doc.id), {
+        password: firebase.firestore.FieldValue.delete()
+      });
+      count++;
+    }
+  });
   if (count > 0) await batch.commit();
 }
 
@@ -260,37 +271,65 @@ function reRenderActive() {
 }
 
 // ── Listeners en tiempo real ───────────────────────────────
-function startListeners() {
+// Listener de usuarios (directorio interno, legible por cualquier autenticado)
+function startUsersListener() {
   fdb.collection('users').onSnapshot(snap => {
     _cache.users = snap.docs.map(d => d.data());
     reRenderActive();
-  });
-  fdb.collection('solicitudes').onSnapshot(snap => {
-    _cache.sols = snap.docs.map(d => d.data());
-    reRenderActive();
-  });
-  // Listener de notificaciones se inicia en initDashboard() según el rol
+  }, err => console.error('Listener usuarios:', err));
 }
+
+// Define QUÉ solicitudes descarga cada rol (alcance = lo que permiten las reglas)
+//   admin / gerente / Fescobar (coordinador) → todas
+//   jefe_area / supervisor                    → su área + las propias
+//   mantenimiento (técnico)                   → asignadas a él + las propias
+//   user                                      → solo las propias
+function solQueriesForRole() {
+  const col = fdb.collection('solicitudes');
+  const r = CU.role;
+  if (r === 'admin' || r === 'gerente' || esCoordinador()) return [col];
+  if (r === 'jefe_area' || r === 'supervisor')
+    return [col.where('areaCode', '==', CU.areaCode), col.where('userEmail', '==', CU.email)];
+  if (r === 'mantenimiento')
+    return [col.where('asignadoA.email', '==', CU.email), col.where('userEmail', '==', CU.email)];
+  return [col.where('userEmail', '==', CU.email)]; // user
+}
+
+// Suscribe los listeners de solicitudes según el alcance del rol y los fusiona en _cache.sols
+let _solUnsubs = [];
+function startSolsListeners() {
+  _solUnsubs.forEach(u => u());
+  _solUnsubs = [];
+  const queries = solQueriesForRole();
+  const parts = queries.map(() => []);
+  queries.forEach((q, i) => {
+    const unsub = q.onSnapshot(snap => {
+      parts[i] = snap.docs.map(d => d.data());
+      const byId = {};
+      parts.forEach(arr => arr.forEach(s => { byId[s.id] = s; }));
+      _cache.sols = Object.values(byId);
+      reRenderActive();
+    }, err => console.error('Listener solicitudes:', err));
+    _solUnsubs.push(unsub);
+  });
+}
+// Listener de notificaciones se inicia en initDashboard() según el rol
 
 // ── App Init ───────────────────────────────────────────────
 // La sesión persiste automáticamente vía Firebase Auth.
 // Los datos se cargan solo cuando hay usuario autenticado.
 
+// Carga el directorio de usuarios y corre los seeds/migraciones.
+// NO carga solicitudes aquí: eso lo hace startSolsListeners() una vez que se
+// conoce el rol del usuario (CU), para respetar el alcance de las reglas.
 async function loadDataAndStart() {
-  const [usersSnap, solsSnap] = await Promise.all([
-    fdb.collection('users').get(),
-    fdb.collection('solicitudes').get(),
-  ]);
+  const usersSnap = await fdb.collection('users').get();
   _cache.users = usersSnap.docs.map(d => d.data());
-  _cache.sols  = solsSnap.docs.map(d => d.data());
 
   await seedUsers();
   await migrateJefaturaTitles();
-  await seedTestTiempos();
   const usersSnap2 = await fdb.collection('users').get();
   _cache.users = usersSnap2.docs.map(d => d.data());
-
-  startListeners();
 }
 
 // Punto de entrada: escucha el estado de autenticación Firebase
@@ -298,7 +337,7 @@ fauth.onAuthStateChanged(async (firebaseUser) => {
   if (firebaseUser) {
     try {
       await loadDataAndStart();
-      const perfil = _cache.users.find(u => u.email.toLowerCase() === firebaseUser.email.toLowerCase());
+      const perfil = _cache.users.find(u => (u.email || '').toLowerCase() === firebaseUser.email.toLowerCase());
       if (!perfil) {
         // Cuenta Auth sin perfil Firestore → cerrar sesión
         await fauth.signOut();
@@ -308,6 +347,9 @@ fauth.onAuthStateChanged(async (firebaseUser) => {
       CU = perfil;
       // Corregir título obsoleto en memoria (por si Firestore aún no fue migrado)
       if (CU.title === 'Técnico de Mantenimiento') CU.title = 'Jefatura de Área';
+      // Listeners en tiempo real: usuarios (todos) + solicitudes (según alcance del rol)
+      startUsersListener();
+      startSolsListeners();
       initDashboard();
       showScreen('dashboard');
       backfillNotificaciones().catch(console.error);
@@ -690,6 +732,14 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
   if (!fotosBase64.length) { err.textContent = 'Debe adjuntar al menos una fotografía de respaldo.'; return; }
   err.textContent = '';
 
+  // Bloquear el botón para evitar doble envío (folios y solicitudes duplicadas)
+  const btnEnviar = e.target.querySelector('button[type="submit"]');
+  if (btnEnviar.disabled) return;
+  btnEnviar.disabled = true;
+  const btnEnviarTxt = btnEnviar.textContent;
+  btnEnviar.textContent = 'Enviando...';
+
+  try {
   const [areaCode, areaGroup, areaSub] = areaVal.split('|');
   const ticket = await generateTicket();
   const nueva = {
@@ -715,41 +765,46 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
     decidedAt: null,
   };
 
+  // Escritura crítica: si falla, NO se pierde lo que ingresó el usuario
   await DB.addSol(nueva);
 
-  // Notificar a usuarios de mantenimiento y admin sobre la nueva solicitud
-  const destinatarios = DB.users().filter(u =>
-    ['mantenimiento', 'admin'].includes(u.role) && u.id !== CU.id
-  );
-  if (destinatarios.length > 0) {
-    const batch = fdb.batch();
-    const prioBadge = { Alta:'🔴', Media:'🟡', Baja:'🟢' };
-    destinatarios.forEach(u => {
-      const nid = uid();
-      batch.set(fdb.collection('notificaciones').doc(nid), {
-        id: nid,
-        toUserId: u.id,
-        toEmail: u.email,
-        type: 'nueva',
-        icon: '📋',
-        message: `Nueva solicitud ${nueva.ticket} <strong>${esc(nueva.titulo)}</strong> ingresada por <strong>${esc(CU.name)}</strong> · ${nueva.areaGroup} ${prioBadge[nueva.prioridad]||''}`,
-        solicitudId: nueva.id,
-        ticket: nueva.ticket,
-        titulo: nueva.titulo,
-        esActivable: false,
-        read: false,
-        createdAt: nueva.createdAt,
+  // Notificaciones: mejor esfuerzo — un fallo aquí no invalida la solicitud ya guardada
+  try {
+    const destinatarios = DB.users().filter(u =>
+      ['mantenimiento', 'admin'].includes(u.role) && u.id !== CU.id
+    );
+    if (destinatarios.length > 0) {
+      const batch = fdb.batch();
+      const prioBadge = { Alta:'🔴', Media:'🟡', Baja:'🟢' };
+      destinatarios.forEach(u => {
+        const nid = uid();
+        batch.set(fdb.collection('notificaciones').doc(nid), {
+          id: nid,
+          toUserId: u.id,
+          toEmail: u.email,
+          type: 'nueva',
+          icon: '📋',
+          message: `Nueva solicitud ${nueva.ticket} <strong>${esc(nueva.titulo)}</strong> ingresada por <strong>${esc(CU.name)}</strong> · ${nueva.areaGroup} ${prioBadge[nueva.prioridad]||''}`,
+          solicitudId: nueva.id,
+          ticket: nueva.ticket,
+          titulo: nueva.titulo,
+          esActivable: false,
+          read: false,
+          createdAt: nueva.createdAt,
+        });
       });
-    });
-    await batch.commit();
-    // Enviar email a cada destinatario
-    destinatarios.forEach(u => {
-      sendEmail(
-        u.email,
-        `Nueva solicitud ${nueva.ticket} "${nueva.titulo}" ingresada por ${CU.name} · ${nueva.areaGroup}`,
-        nueva.ticket, nueva.areaGroup, nueva.prioridad
-      );
-    });
+      await batch.commit();
+      // Enviar email a cada destinatario
+      destinatarios.forEach(u => {
+        sendEmail(
+          u.email,
+          `Nueva solicitud ${nueva.ticket} "${nueva.titulo}" ingresada por ${CU.name} · ${nueva.areaGroup}`,
+          nueva.ticket, nueva.areaGroup, nueva.prioridad
+        );
+      });
+    }
+  } catch (notifErr) {
+    console.error('No se pudieron crear las notificaciones (la solicitud sí se guardó):', notifErr);
   }
 
   toast('Requerimiento enviado correctamente. La Jefatura de Área revisará el costo estimado.','ok');
@@ -759,6 +814,16 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
   fotoInput.value = '';
   renderFotosPreview();
   document.getElementById('file-name-display').textContent = 'Haga clic o arrastre imágenes aquí';
+  } catch (err) {
+    // El guardado de la solicitud falló: conservar lo ingresado y avisar
+    console.error('Error al guardar la solicitud:', err);
+    document.getElementById('sol-error').textContent =
+      'No se pudo enviar el requerimiento (problema de conexión). Tus datos y fotos siguen aquí — intenta nuevamente.';
+    toast('No se pudo enviar. Revisa tu conexión e intenta otra vez.', 'err');
+  } finally {
+    btnEnviar.disabled = false;
+    btnEnviar.textContent = btnEnviarTxt;
+  }
 });
 
 // ── MIS SOLICITUDES ────────────────────────────────────────
