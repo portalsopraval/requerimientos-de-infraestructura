@@ -27,10 +27,25 @@ const fauth  = firebase.auth();
 // ── EmailJS Init ───────────────────────────────────────────
 emailjs.init('1r8XDNUiPNKGswq3W');
 
+// Envía un correo a UN destinatario (el participante del paso del flujo).
+// No usar para envíos masivos: el flujo notifica por correo solo a quien debe actuar.
 function sendEmail(toEmail, mensaje, ticket, area, prioridad) {
-  // Envío de emails desactivado temporalmente
-  return;
+  if (!toEmail) return;
+  const mensajePlano = String(mensaje || '').replace(/<[^>]*>/g, '');
+  try {
+    emailjs.send('service_xcfs28z', 'template_hnkmwy9', {
+      to_email:  toEmail,
+      mensaje:   mensajePlano,
+      ticket:    ticket || '',
+      area:      area || '',
+      prioridad: prioridad || '',
+    }).catch(err => console.warn('EmailJS error:', err));
+  } catch (e) { console.warn('EmailJS error:', e); }
 }
+
+// Correo del coordinador de mantenimiento (primer actor del flujo tras ingreso)
+const EMAIL_COORDINADOR = 'fescobara@sopraval.cl';
+function getCoordinador() { return DB.users().find(u => u.email === EMAIL_COORDINADOR); }
 
 // ── Cache en memoria ───────────────────────────────────────
 const _cache = { users: [], sols: [], notifs: [] };
@@ -794,14 +809,16 @@ document.getElementById('form-solicitud').addEventListener('submit', async e => 
         });
       });
       await batch.commit();
-      // Enviar email a cada destinatario
-      destinatarios.forEach(u => {
+      // Correo solo al coordinador (siguiente actor del flujo), no a todos.
+      // El resto de mantenimiento/admin recibe la notificación in-app de arriba.
+      const coordinador = getCoordinador();
+      if (coordinador) {
         sendEmail(
-          u.email,
-          `Nueva solicitud ${nueva.ticket} "${nueva.titulo}" ingresada por ${CU.name} · ${nueva.areaGroup}`,
+          coordinador.email,
+          `Nueva solicitud ${nueva.ticket} "${nueva.titulo}" ingresada por ${CU.name} · ${nueva.areaGroup}. Requiere tu revisión.`,
           nueva.ticket, nueva.areaGroup, nueva.prioridad
         );
-      });
+      }
     }
   } catch (notifErr) {
     console.error('No se pudieron crear las notificaciones (la solicitud sí se guardó):', notifErr);
@@ -1333,6 +1350,9 @@ document.getElementById('btn-modal-rechazar-sol').addEventListener('click', asyn
       message: `Tu solicitud ${sol.ticket||''} <strong>${esc(sol.titulo)}</strong> fue <strong>RECHAZADA</strong> por el coordinador de mantenimiento.${motivo ? ' Motivo: ' + esc(motivo) : ''}`,
       solicitudId: sol.id, ticket: sol.ticket||'', read: false, createdAt: new Date().toISOString(),
     });
+    sendEmail(solicitante.email,
+      `Tu solicitud ${sol.ticket||''} "${sol.titulo}" fue RECHAZADA por el coordinador de mantenimiento.${motivo ? ' Motivo: ' + motivo : ''}`,
+      sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
   }
   toast('Solicitud rechazada y notificación enviada al solicitante.', 'err');
   closeModal();
@@ -1369,6 +1389,9 @@ document.getElementById('btn-derivar-sol').addEventListener('click', async () =>
       solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
       esActivable: !!sol.esActivable, read: false, createdAt: new Date().toISOString(),
     });
+    sendEmail(tecnico.email,
+      `Se te asignó la ejecución de la solicitud ${sol.ticket||''} "${sol.titulo}".`,
+      sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
     toast(`Solicitud asignada a ${tecnico.name} para ejecución.`, 'ok');
   } else {
     // Primera derivación: asignación para cotización de costo
@@ -1391,6 +1414,9 @@ document.getElementById('btn-derivar-sol').addEventListener('click', async () =>
       solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
       esActivable: activable, read: false, createdAt: new Date().toISOString(),
     });
+    sendEmail(tecnico.email,
+      `Se te asignó la solicitud ${sol.ticket||''} "${sol.titulo}" para ingresar el costo estimado.`,
+      sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
     toast(`Solicitud derivada a ${tecnico.name} correctamente.`, 'ok');
   }
 
@@ -1424,6 +1450,9 @@ document.getElementById('btn-devolver-fescobara').addEventListener('click', asyn
       solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
       esActivable: !!sol.esActivable, read: false, createdAt: new Date().toISOString(),
     });
+    sendEmail(fescobara.email,
+      `Solicitud ${sol.ticket||''} "${sol.titulo}" fue devuelta por ${CU.name} para revisión final.${notas ? ' Notas: '+notas : ''}`,
+      sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
   }
 
   toast('Solicitud devuelta a Fescobara para revisión final.', 'ok');
@@ -1463,6 +1492,9 @@ document.getElementById('btn-guardar-codigo').addEventListener('click', async ()
       solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
       esActivable: !!sol.esActivable, read: false, createdAt: new Date().toISOString(),
     });
+    sendEmail(fescobara.email,
+      `Solicitud ${sol.ticket||''} "${sol.titulo}" tiene código ${tipoCodigo}: ${numCodigo} ingresado. Lista para asignar ejecutor.`,
+      sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
   }
 
   toast('Código guardado. La solicitud fue enviada a Jefatura de Área para asignar ejecutor.', 'ok');
@@ -1503,6 +1535,9 @@ document.getElementById('btn-guardar-imputacion').addEventListener('click', asyn
       solicitudId: sol.id, ticket: sol.ticket||'', titulo: sol.titulo,
       esActivable: false, read: false, createdAt: new Date().toISOString(),
     });
+    sendEmail(fescobara.email,
+      `Solicitud ${sol.ticket||''} "${sol.titulo}" tiene imputación (CECO ${cecoNum}) ingresada. Lista para asignar ejecutor.`,
+      sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
   }
 
   toast('Imputación guardada. La solicitud fue enviada a Mantenimiento para asignar ejecutor.', 'ok');
@@ -1632,10 +1667,17 @@ async function decidir(decision) {
     });
   });
   await batch.commit();
-  // Enviar email a mantenimiento
-  mantenimientoUsers.forEach(u => {
-    sendEmail(u.email, msgs[decision] || `Requerimiento ${decision}`, sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
-  });
+  // Correo solo al participante que sigue en el flujo (no a todo mantenimiento).
+  // La notificación in-app de arriba sí llega a todo mantenimiento.
+  if (decision === 'Autorizada' && !sol.esActivable && sol.asignadoA?.email) {
+    // Siguiente actor: el valorizador ingresa CECO + Clase de Cuenta
+    sendEmail(sol.asignadoA.email, msgs.Autorizada, sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
+  } else if (decision !== 'Autorizada') {
+    // Postergada / Rechazada → avisar al coordinador para gestionar
+    const coord = getCoordinador();
+    if (coord) sendEmail(coord.email, msgs[decision], sol.ticket||'', sol.areaGroup||'', sol.prioridad||'');
+  }
+  // (Autorizada + activable → el solicitante ingresa API/SIM; se le envía correo más abajo)
 
   // Notificar al solicitante sobre la decisión
   const solicitante = DB.users().find(u => u.id === sol.userId);
