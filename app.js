@@ -486,21 +486,30 @@ document.getElementById('form-login').addEventListener('submit', async e => {
       try {
         await loadDataAndStart(); // cargar cache si está vacío
       } catch(_) {}
-      const firestoreUser = _cache.users.find(u =>
-        u.email.toLowerCase() === email && u.password === pass
-      );
-      if (firestoreUser) {
+      const profile = _cache.users.find(u => u.email.toLowerCase() === email);
+      const conPass = profile && profile.password === pass;
+      // Perfil sin contraseña almacenada: pudo ser removida por la migración de seguridad
+      // antes de que el usuario alcanzara a usarla. Permitimos el alta en el primer ingreso.
+      const sinPass = profile && (profile.password === undefined || profile.password === null || profile.password === '');
+      if (profile && (conPass || sinPass)) {
         try {
-          // Crear cuenta Firebase Auth para este usuario (migración transparente)
+          // Crear su cuenta en Firebase Auth (primer ingreso). La contraseña queda en Auth.
           await fauth.createUserWithEmailAndPassword(email, pass);
-          // Eliminar la contraseña en texto del perfil Firestore
-          await fdb.collection('users').doc(firestoreUser.id).update({
-            password: firebase.firestore.FieldValue.delete()
-          });
+          // Si quedaba contraseña en texto en el perfil, eliminarla.
+          if (profile.password !== undefined) {
+            await fdb.collection('users').doc(profile.id).update({
+              password: firebase.firestore.FieldValue.delete()
+            });
+          }
           // onAuthStateChanged se encarga de continuar
         } catch (createErr) {
-          errEl.textContent = 'Error al migrar cuenta. Contacte al administrador.';
-          console.error('Error migración:', createErr);
+          if (createErr.code === 'auth/email-already-in-use') {
+            // Ya tenía cuenta → entonces la contraseña escrita es incorrecta
+            errEl.textContent = 'Contraseña incorrecta.';
+          } else {
+            errEl.textContent = 'No se pudo crear la cuenta. Contacte al administrador.';
+            console.error('Error alta:', createErr);
+          }
         }
       } else {
         errEl.textContent = 'Correo o contraseña incorrectos.';
