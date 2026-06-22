@@ -84,22 +84,26 @@ async function generateTicket() {
 }
 
 // ── Seed usuarios precargados ──────────────────────────────
+// Usuarios base del portal (lista fija). Permite el alta en el primer ingreso
+// sin depender de leer Firestore antes de autenticar.
+const PRESET_USERS = [
+  { email:'fescobara@sopraval.cl',    name:'Fabián Escobar',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Subgerente de Mantenimiento' },
+  { email:'bgutierrezl@agrosuper.com',name:'Barbara Gutierrez', role:'supervisor',    areaCode:'B', areaGroup:'Administración',areaSub:'Administración Gral.',                title:'Jefa de Administración' },
+  { email:'jbarrios@agrosuper.com',   name:'Jorge Barrios',     role:'jefe_area',     areaCode:'A', areaGroup:'Producción',    areaSub:'Producción',                           title:'Subgerente de Producción' },
+  { email:'rabarzua@sopraval.cl',     name:'Rodrigo Abarzua',   role:'gerente',       areaCode:'G0',areaGroup:'Gerencia',      areaSub:'Gerencia de Planta',                   title:'Gerente de Planta' },
+  { email:'mcordovas@agrosuper.com',  name:'Gabriela Cordova',  role:'jefe_area',     areaCode:'C', areaGroup:'Calidad',       areaSub:'Calidad',                              title:'Jefe de Calidad' },
+  { email:'amorgado@sopraval.cl',     name:'Andrea Morgado',    role:'jefe_area',     areaCode:'D', areaGroup:'Personas',      areaSub:'Personas General',                     title:'Jefe de Personas' },
+  { email:'rtrigo@sopraval.cl',       name:'Ricardo Trigo',     role:'jefe_area',     areaCode:'F', areaGroup:'Despacho',      areaSub:'Despacho',                             title:'Jefe de Despacho' },
+  { email:'nmarquez@sopraval.cl',     name:'Nicolás Marquez',   role:'jefe_area',     areaCode:'G', areaGroup:'Rendering',     areaSub:'Planta de Rendering',                  title:'Jefe de Planta Rendering' },
+  { email:'gvelizm@sopraval.cl',      name:'Gino Veliz',        role:'admin',         areaCode:'G0',areaGroup:'Gerencia',      areaSub:'Administración Portal',                title:'Administrador del Sistema' },
+  { email:'cmadridp@sopraval.cl',     name:'Cristobal Madrid',  role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
+  { email:'gzapata@sopraval.cl',      name:'Gonzalo Zapata',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
+  { email:'ccrojas@sopraval.cl',      name:'Cristian Rojas',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
+  { email:'cllopez@sopraval.cl',      name:'Claudio Lopez',     role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
+];
+
 async function seedUsers() {
-  const preset = [
-    { email:'fescobara@sopraval.cl',    name:'Fabián Escobar',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Subgerente de Mantenimiento' },
-    { email:'bgutierrezl@agrosuper.com',name:'Barbara Gutierrez', role:'supervisor',    areaCode:'B', areaGroup:'Administración',areaSub:'Administración Gral.',                title:'Jefa de Administración' },
-    { email:'jbarrios@agrosuper.com',   name:'Jorge Barrios',     role:'jefe_area',     areaCode:'A', areaGroup:'Producción',    areaSub:'Producción',                           title:'Subgerente de Producción' },
-    { email:'rabarzua@sopraval.cl',     name:'Rodrigo Abarzua',   role:'gerente',       areaCode:'G0',areaGroup:'Gerencia',      areaSub:'Gerencia de Planta',                   title:'Gerente de Planta' },
-    { email:'mcordovas@agrosuper.com',  name:'Gabriela Cordova',  role:'jefe_area',     areaCode:'C', areaGroup:'Calidad',       areaSub:'Calidad',                              title:'Jefe de Calidad' },
-    { email:'amorgado@sopraval.cl',     name:'Andrea Morgado',    role:'jefe_area',     areaCode:'D', areaGroup:'Personas',      areaSub:'Personas General',                     title:'Jefe de Personas' },
-    { email:'rtrigo@sopraval.cl',       name:'Ricardo Trigo',     role:'jefe_area',     areaCode:'F', areaGroup:'Despacho',      areaSub:'Despacho',                             title:'Jefe de Despacho' },
-    { email:'nmarquez@sopraval.cl',     name:'Nicolás Marquez',   role:'jefe_area',     areaCode:'G', areaGroup:'Rendering',     areaSub:'Planta de Rendering',                  title:'Jefe de Planta Rendering' },
-    { email:'gvelizm@sopraval.cl',      name:'Gino Veliz',        role:'admin',         areaCode:'G0',areaGroup:'Gerencia',      areaSub:'Administración Portal',                title:'Administrador del Sistema' },
-    { email:'cmadridp@sopraval.cl',     name:'Cristobal Madrid',  role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
-    { email:'gzapata@sopraval.cl',      name:'Gonzalo Zapata',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
-    { email:'ccrojas@sopraval.cl',      name:'Cristian Rojas',    role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
-    { email:'cllopez@sopraval.cl',      name:'Claudio Lopez',     role:'mantenimiento', areaCode:'E', areaGroup:'Mantenimiento', areaSub:'Planificación de Mtto. y Proyectos', title:'Jefatura de Área' },
-  ];
+  const preset = PRESET_USERS;
   const existingEmails = new Set(_cache.users.map(u => u.email));
   const batch = fdb.batch();
   let count = 0;
@@ -491,12 +495,14 @@ document.getElementById('form-login').addEventListener('submit', async e => {
       // Perfil sin contraseña almacenada: pudo ser removida por la migración de seguridad
       // antes de que el usuario alcanzara a usarla. Permitimos el alta en el primer ingreso.
       const sinPass = profile && (profile.password === undefined || profile.password === null || profile.password === '');
-      if (profile && (conPass || sinPass)) {
+      // Usuario base del portal (lista fija): permitir alta aunque no se pueda leer Firestore aún.
+      const esPreset = PRESET_USERS.some(u => u.email.toLowerCase() === email);
+      if (esPreset || (profile && (conPass || sinPass))) {
         try {
           // Crear su cuenta en Firebase Auth (primer ingreso). La contraseña queda en Auth.
           await fauth.createUserWithEmailAndPassword(email, pass);
           // Si quedaba contraseña en texto en el perfil, eliminarla.
-          if (profile.password !== undefined) {
+          if (profile && profile.password !== undefined) {
             await fdb.collection('users').doc(profile.id).update({
               password: firebase.firestore.FieldValue.delete()
             });
