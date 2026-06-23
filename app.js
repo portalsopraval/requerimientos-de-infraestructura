@@ -303,12 +303,21 @@ function startUsersListener() {
 //   jefe_area / supervisor                    → su área + las propias
 //   mantenimiento (técnico)                   → asignadas a él + las propias
 //   user                                      → solo las propias
+// Visores de equipo: lider -> correos de su equipo (debe coincidir con roles/{email}.team)
+const EQUIPOS_VISOR = {
+  'mcordovas@agrosuper.com': ['earojasg@sopraval.cl','emerino@sopraval.cl','fordenes@agrosuper.com','ffritis@sopraval.cl','krivera@sopraval.cl']
+};
+const equipoVisor = () => (CU && EQUIPOS_VISOR[(CU.email||'').toLowerCase()]) || null;
+
 function solQueriesForRole() {
   const col = fdb.collection('solicitudes');
   const r = CU.role;
   if (r === 'admin' || r === 'gerente' || esCoordinador()) return [col];
-  if (r === 'jefe_area' || r === 'supervisor')
-    return [col.where('areaCode', '==', CU.areaCode), col.where('userEmail', '==', CU.email)];
+  if (r === 'jefe_area' || r === 'supervisor') {
+    const qs = [col.where('areaCode', '==', CU.areaCode), col.where('userEmail', '==', CU.email)];
+    const eq = equipoVisor(); if (eq) qs.push(col.where('userEmail', 'in', eq)); // visor de equipo
+    return qs;
+  }
   if (r === 'mantenimiento')
     return [col.where('asignadoA.email', '==', CU.email), col.where('userEmail', '==', CU.email)];
   return [col.where('userEmail', '==', CU.email)]; // user
@@ -943,7 +952,7 @@ function renderRevision() {
   const hasta    = document.getElementById('rev-fecha-hasta').value;
 
   let sols = DB.sols();
-  if (CU.role === 'jefe_area') sols = sols.filter(s => s.areaCode === CU.areaCode);
+  if (CU.role === 'jefe_area') { const eq = equipoVisor(); sols = sols.filter(s => s.areaCode === CU.areaCode || (eq && eq.includes((s.userEmail||'').toLowerCase()))); }
   // Gerente solo ve solicitudes desde Valorizada en adelante (no Pendiente ni Derivada)
   if (CU.role === 'gerente') sols = sols.filter(s => ['Valorizada','Autorizada','Postergada','Rechazada'].includes(s.estado));
   if (area)      sols = sols.filter(s => s.areaCode  === area);
