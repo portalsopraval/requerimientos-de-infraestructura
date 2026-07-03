@@ -390,6 +390,12 @@ fauth.onAuthStateChanged(async (firebaseUser) => {
       CU = perfil;
       // Corregir título obsoleto en memoria (por si Firestore aún no fue migrado)
       if (CU.title === 'Técnico de Mantenimiento') CU.title = 'Jefatura de Área';
+      // Correo no verificado → enviar enlace y bloquear acceso hasta verificar
+      if (!firebaseUser.emailVerified) {
+        await firebaseUser.sendEmailVerification().catch(() => {});
+        forzarVerificacionEmail(firebaseUser);
+        return;
+      }
       // Primer ingreso o clave por defecto → obligar a definir contraseña personal
       if (_forcePwChange || CU.mustChangePassword) { forzarCambioPassword(firebaseUser); return; }
       // Listeners en tiempo real: usuarios (todos) + solicitudes (según alcance del rol)
@@ -406,6 +412,19 @@ fauth.onAuthStateChanged(async (firebaseUser) => {
     showScreen('login');
   }
 });
+
+function forzarVerificacionEmail(firebaseUser) {
+  if (document.getElementById('verify-pending')) return;
+  const ov = document.createElement('div');
+  ov.id = 'verify-pending';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:9999';
+  ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:440px;width:92%;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <h3 style="margin:0 0 6px;color:#1B3580">📧 Verifica tu correo</h3>
+    <p style="color:#6B7280;font-size:.88rem;margin:0 0 16px">Se envió un enlace de verificación a <strong>${firebaseUser.email}</strong>. Haz clic en el enlace y luego vuelve a iniciar sesión para continuar.</p>
+    <button onclick="fauth.signOut()" style="width:100%;padding:11px;background:#1B3580;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">Cerrar sesión</button>
+  </div>`;
+  document.body.appendChild(ov);
+}
 
 // Pantalla obligatoria de cambio de contraseña (primer ingreso o clave por defecto)
 function forzarCambioPassword(firebaseUser) {
@@ -446,7 +465,7 @@ function forzarCambioPassword(firebaseUser) {
       btn.disabled = false; btn.textContent = 'Guardar y continuar';
       err.textContent = e.code === 'auth/requires-recent-login'
         ? 'Por seguridad, vuelve a iniciar sesión y cambia la clave de inmediato.'
-        : 'Error al cambiar la contraseña: ' + e.message;
+        : `Error al cambiar la contraseña: ${e.message}`;
     }
   });
 }
