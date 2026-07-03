@@ -225,7 +225,18 @@ let chartCount = null, chartCost = null;
 let chartTendencia = null, chartRankingAreas = null, chartComparativo = null;
 let chartMttEstado = null, chartMttArea = null;
 let _activeTab = null;
-let _notifInitialized = false; // evita notificaciones nativas en la carga inicial
+let _notifInitialized = false;
+let _inactTimer = null;
+const _INACT_MS = 30 * 60 * 1000;
+function _resetInact() {
+  clearTimeout(_inactTimer);
+  _inactTimer = setTimeout(() => { if (CU) fauth.signOut(); }, _INACT_MS);
+}
+function _initInact() {
+  ['click','keydown','mousemove','scroll','touchstart'].forEach(ev =>
+    document.addEventListener(ev, _resetInact, { passive: true }));
+  _resetInact();
+}
 
 // ── Paginación ─────────────────────────────────────────────
 const PAGE_SIZE = 20;
@@ -539,8 +550,8 @@ document.getElementById('form-login').addEventListener('submit', async e => {
   errEl.textContent = '';
   btnLogin.disabled = true;
   btnLogin.textContent = 'Ingresando...';
-  _forcePwChange = (pass === BASE_PASS); // si usa la clave base, deberá cambiarla al entrar
-
+  _forcePwChange = (pass === BASE_PASS);
+  await fauth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
   try {
     await fauth.signInWithEmailAndPassword(email, pass);
     // onAuthStateChanged se encarga del resto
@@ -594,7 +605,7 @@ document.getElementById('form-login').addEventListener('submit', async e => {
 
 document.getElementById('btn-logout').addEventListener('click', async () => {
   CU = null; _activeTab = null; chartCount = null; chartCost = null;
-  _notifInitialized = false;
+  _notifInitialized = false; clearTimeout(_inactTimer);
   document.getElementById('form-login').reset();
   await fauth.signOut();
   // onAuthStateChanged mostrará el login automáticamente
@@ -620,7 +631,7 @@ document.getElementById('form-cambiar-pass').addEventListener('submit', async e 
   const confirma = document.getElementById('cp-confirma').value;
   const errEl    = document.getElementById('cp-error');
   const btn      = e.target.querySelector('button[type="submit"]');
-  if (nueva.length < 6)   { errEl.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.'; return; }
+  if (nueva.length < 8)   { errEl.textContent = 'La nueva contraseña debe tener al menos 8 caracteres.'; return; }
   if (nueva !== confirma) { errEl.textContent = 'Las contraseñas no coinciden.'; return; }
   errEl.textContent = '';
   btn.disabled = true; btn.textContent = 'Guardando...';
@@ -747,7 +758,7 @@ function initDashboard() {
   if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
     setTimeout(() => toast('Activa los avisos del portal con 🔕 en la barra superior.', 'info'), 3500);
   }
-
+  _initInact();
   buildTabs();
 }
 
