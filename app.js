@@ -225,6 +225,7 @@ let chartCount = null, chartCost = null;
 let chartTendencia = null, chartRankingAreas = null, chartComparativo = null;
 let chartMttEstado = null, chartMttArea = null;
 let _activeTab = null;
+let _notifInitialized = false; // evita notificaciones nativas en la carga inicial
 
 // ── Paginación ─────────────────────────────────────────────
 const PAGE_SIZE = 20;
@@ -593,6 +594,7 @@ document.getElementById('form-login').addEventListener('submit', async e => {
 
 document.getElementById('btn-logout').addEventListener('click', async () => {
   CU = null; _activeTab = null; chartCount = null; chartCost = null;
+  _notifInitialized = false;
   document.getElementById('form-login').reset();
   await fauth.signOut();
   // onAuthStateChanged mostrará el login automáticamente
@@ -729,7 +731,22 @@ function initDashboard() {
     .onSnapshot(snap => {
       _cache.notifs = snap.docs.map(d => ({ docId: d.id, ...d.data() })).filter(n => !n.read);
       updateNotifBadge();
+      if (_notifInitialized) {
+        snap.docChanges().forEach(change => {
+          if (change.type === 'added') {
+            const n = { docId: change.doc.id, ...change.doc.data() };
+            if (!n.read) mostrarNotifNativa(n);
+          }
+        });
+      } else {
+        _notifInitialized = true;
+      }
     });
+
+  actualizarBtnPush();
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    setTimeout(() => toast('Activa los avisos del portal con 🔕 en la barra superior.', 'info'), 3500);
+  }
 
   buildTabs();
 }
@@ -2433,6 +2450,54 @@ document.getElementById('form-nuevo-user').addEventListener('submit', async e =>
 });
 
 // ── NOTIFICACIONES ────────────────────────────────────────
+
+function mostrarNotifNativa(n) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  if (document.visibilityState === 'visible') return;
+  const body = String(n.message || '').replace(/<[^>]*>/g, '');
+  const notif = new Notification('Portal Sopraval', {
+    body,
+    icon: 'logo-sopraval.png',
+    tag: n.docId,
+  });
+  notif.onclick = () => { window.focus(); notif.close(); };
+}
+
+async function solicitarPermisoNotif() {
+  if (typeof Notification === 'undefined') return;
+  if (Notification.permission === 'denied') {
+    toast('El navegador bloqueó los avisos. Cámbialo desde el 🔒 en la barra de dirección → Notificaciones → Permitir.', 'info');
+    return;
+  }
+  if (Notification.permission === 'granted') { toast('Los avisos ya están activados.', 'ok'); return; }
+  const perm = await Notification.requestPermission();
+  actualizarBtnPush();
+  if (perm === 'granted') toast('Avisos activados. Recibirás alertas aunque la ventana esté minimizada.', 'ok');
+}
+
+async function togglePushPerm() {
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    toast('Para desactivar: clic en 🔒 en la barra de dirección → Notificaciones → Bloquear.', 'info');
+  } else {
+    await solicitarPermisoNotif();
+  }
+}
+
+function actualizarBtnPush() {
+  const btn = document.getElementById('btn-push-notif');
+  if (!btn) return;
+  if (typeof Notification === 'undefined') { btn.style.display = 'none'; return; }
+  btn.style.display = 'inline-flex';
+  const perm = Notification.permission;
+  if (perm === 'granted') {
+    btn.textContent = '🔔'; btn.title = 'Avisos activados'; btn.style.opacity = '1';
+  } else if (perm === 'denied') {
+    btn.textContent = '🔕'; btn.title = 'Avisos bloqueados por el navegador'; btn.style.opacity = '0.35';
+  } else {
+    btn.textContent = '🔕'; btn.title = 'Activar avisos del portal'; btn.style.opacity = '1';
+  }
+}
+
 function updateNotifBadge() {
   const badge = document.getElementById('notif-badge');
   const btn   = document.getElementById('btn-notif');
@@ -2891,4 +2956,10 @@ function renderAdminPanel() {
       }
     });
   });
+}
+
+
+// ── Service Worker (Web Push / FCM background) ───────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(() => {});
 }
