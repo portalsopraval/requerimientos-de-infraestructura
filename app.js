@@ -111,7 +111,7 @@ async function seedUsers() {
     if (!existingEmails.has(p.email)) {
       const id = uid();
       batch.set(fdb.collection('users').doc(id), {
-        id, password: p.email === 'gvelizm@sopraval.cl' ? 'Sopraval2026' : 'Sopraval2026', createdAt: new Date().toISOString(), ...p
+        id, createdAt: new Date().toISOString(), mustChangePassword: true, ...p
       });
       count++;
     }
@@ -361,13 +361,16 @@ async function loadDataAndStart() {
 }
 
 // Punto de entrada: escucha el estado de autenticación Firebase
+const BASE_PASS = 'Sopraval2026';
+let _forcePwChange = false; // fuerza cambio de clave si entra con la contraseña por defecto
+
 fauth.onAuthStateChanged(async (firebaseUser) => {
   if (firebaseUser) {
     try {
       await loadDataAndStart();
       const perfil = _cache.users.find(u => (u.email || '').toLowerCase() === firebaseUser.email.toLowerCase());
       if (!perfil) {
-        // Cuenta Auth sin perfil Firestore → cerrar sesión
+        // Cuenta Auth sin perfil Firestore → cerrar sesión (sin auto-registro de cuentas ajenas)
         await fauth.signOut();
         showScreen('login');
         return;
@@ -375,6 +378,8 @@ fauth.onAuthStateChanged(async (firebaseUser) => {
       CU = perfil;
       // Corregir título obsoleto en memoria (por si Firestore aún no fue migrado)
       if (CU.title === 'Técnico de Mantenimiento') CU.title = 'Jefatura de Área';
+      // Primer ingreso o clave por defecto → obligar a definir contraseña personal
+      if (_forcePwChange || CU.mustChangePassword) { forzarCambioPassword(firebaseUser); return; }
       // Listeners en tiempo real: usuarios (todos) + solicitudes (según alcance del rol)
       startUsersListener();
       startSolsListeners();
@@ -389,6 +394,50 @@ fauth.onAuthStateChanged(async (firebaseUser) => {
     showScreen('login');
   }
 });
+
+// Pantalla obligatoria de cambio de contraseña (primer ingreso o clave por defecto)
+function forzarCambioPassword(firebaseUser) {
+  if (document.getElementById('pw-force')) return;
+  const ov = document.createElement('div');
+  ov.id = 'pw-force';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:9999';
+  ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:440px;width:92%;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <h3 style="margin:0 0 6px;color:#1B3580">🔒 Define tu nueva contraseña</h3>
+    <p style="color:#6B7280;font-size:.88rem;margin:0 0 16px">Por seguridad, antes de continuar debes reemplazar la contraseña inicial por una personal.</p>
+    <label style="display:block;font-size:.82rem;font-weight:600;margin-bottom:4px">Nueva contraseña</label>
+    <input type="password" id="pwf-new" placeholder="Mínimo 8 caracteres" style="width:100%;padding:10px;border:1px solid #CBD5E1;border-radius:8px;margin-bottom:12px">
+    <label style="display:block;font-size:.82rem;font-weight:600;margin-bottom:4px">Repetir contraseña</label>
+    <input type="password" id="pwf-new2" placeholder="Repite la contraseña" style="width:100%;padding:10px;border:1px solid #CBD5E1;border-radius:8px;margin-bottom:10px">
+    <p id="pwf-err" style="color:#DC2626;font-size:.82rem;min-height:18px;margin:0 0 8px"></p>
+    <button id="pwf-save" style="width:100%;padding:11px;background:#1B3580;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">Guardar y continuar</button>
+  </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('pwf-save').addEventListener('click', async () => {
+    const a = document.getElementById('pwf-new').value, b = document.getElementById('pwf-new2').value;
+    const err = document.getElementById('pwf-err'); err.textContent = '';
+    if (a.length < 8) { err.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
+    if (a === BASE_PASS) { err.textContent = 'No puede ser la contraseña inicial.'; return; }
+    if (a !== b) { err.textContent = 'Las contraseñas no coinciden.'; return; }
+    const btn = document.getElementById('pwf-save'); btn.disabled = true; btn.textContent = 'Guardando...';
+    try {
+      await firebaseUser.updatePassword(a);
+      await fdb.collection('users').doc(CU.id).update({ mustChangePassword: false });
+      CU.mustChangePassword = false; _forcePwChange = false;
+      ov.remove();
+      // continuar al dashboard
+      startUsersListener();
+      startSolsListeners();
+      initDashboard();
+      showScreen('dashboard');
+      backfillNotificaciones().catch(console.error);
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Guardar y continuar';
+      err.textContent = e.code === 'auth/requires-recent-login'
+        ? 'Por seguridad, vuelve a iniciar sesión y cambia la clave de inmediato.'
+        : 'Error al cambiar la contraseña: ' + e.message;
+    }
+  });
+}
 
 // Migración: crear notificaciones para solicitudes decididas antes del sistema de notificaciones
 async function backfillNotificaciones() {
@@ -489,6 +538,7 @@ document.getElementById('form-login').addEventListener('submit', async e => {
   errEl.textContent = '';
   btnLogin.disabled = true;
   btnLogin.textContent = 'Ingresando...';
+  _forcePwChange = (pass === BASE_PASS); // si usa la clave base, deberá cambiarla al entrar
 
   try {
     await fauth.signInWithEmailAndPassword(email, pass);
