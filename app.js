@@ -390,12 +390,6 @@ fauth.onAuthStateChanged(async (firebaseUser) => {
       CU = perfil;
       // Corregir título obsoleto en memoria (por si Firestore aún no fue migrado)
       if (CU.title === 'Técnico de Mantenimiento') CU.title = 'Jefatura de Área';
-      // Correo no verificado → enviar enlace y bloquear acceso hasta verificar
-      if (!firebaseUser.emailVerified) {
-        await firebaseUser.sendEmailVerification().catch(() => {});
-        forzarVerificacionEmail(firebaseUser);
-        return;
-      }
       // Primer ingreso o clave por defecto → obligar a definir contraseña personal
       if (_forcePwChange || CU.mustChangePassword) { forzarCambioPassword(firebaseUser); return; }
       // Listeners en tiempo real: usuarios (todos) + solicitudes (según alcance del rol)
@@ -719,29 +713,8 @@ document.getElementById('form-register').addEventListener('submit', async e => {
   if (!area) { errEl.textContent = 'Seleccione su área de trabajo.'; return; }
   errEl.textContent = '';
   btn.disabled = true; btn.textContent = 'Creando cuenta...';
-  try {
-    await fauth.createUserWithEmailAndPassword(email, pass);
-    const [areaCode, areaGroup, areaSub] = area.split('|');
-    const newUser = {
-      id: uid(), name, email, role: 'user',
-      areaCode, areaGroup, areaSub, title: '',
-      createdAt: new Date().toISOString()
-      // sin campo password — Firebase Auth gestiona las credenciales
-    };
-    await DB.addUser(newUser);
-    // onAuthStateChanged detecta la sesión y entra al dashboard automáticamente
-    document.getElementById('form-register').reset();
-  } catch (err) {
-    if (err.code === 'auth/email-already-in-use') {
-      errEl.textContent = 'Ese correo ya está registrado.';
-    } else if (err.code === 'auth/weak-password') {
-      errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.';
-    } else {
-      errEl.textContent = 'Error al crear la cuenta. Intente nuevamente.';
-      console.error(err);
-    }
-    btn.disabled = false; btn.textContent = 'Crear cuenta';
-  }
+  errEl.textContent = 'El registro de cuentas está deshabilitado. Contacte al administrador para que cree su acceso.';
+  btn.disabled = false; btn.textContent = 'Crear cuenta';
 });
 
 // ── Dashboard init ─────────────────────────────────────────
@@ -2441,39 +2414,18 @@ document.getElementById('form-nuevo-user').addEventListener('submit', async e =>
   btn.disabled = true; btn.textContent = 'Creando...';
 
   try {
-    // Crear cuenta Firebase Auth via REST API (no afecta la sesión actual del admin)
-    const apiKey = firebaseConfig.apiKey;
-    const resp = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: pass, returnSecureToken: false })
-      }
-    );
-    const data = await resp.json();
-    if (data.error && data.error.message !== 'EMAIL_EXISTS') {
-      errEl.textContent = `Error Auth: ${data.error.message}`;
-      btn.disabled = false; btn.textContent = 'Crear usuario';
-      return;
-    }
-
     const [areaCode, areaGroup, areaSub] = area.split('|');
     const newUser = {
       id: uid(), name, email, role,
       areaCode, areaGroup, areaSub, title,
       createdAt: new Date().toISOString()
-      // sin campo password
     };
     await DB.addUser(newUser);
     document.getElementById('modal-nuevo-user-overlay').style.display = 'none';
-    const msg = data.error?.message === 'EMAIL_EXISTS'
-      ? `Perfil de ${name} restaurado (cuenta Auth ya existía).`
-      : `Usuario ${name} creado correctamente.`;
-    toast(msg, 'ok');
+    toast(`Perfil de ${name} creado. Ve a Firebase Console → Authentication → Agregar usuario con correo ${email} y clave ${pass || BASE_PASS}.`, 'ok');
     renderAdminPanel();
   } catch (err) {
-    errEl.textContent = 'Error de red al crear el usuario. Intente nuevamente.';
+    errEl.textContent = 'Error al crear el perfil. Intente nuevamente.';
     console.error(err);
     btn.disabled = false; btn.textContent = 'Crear usuario';
   }
